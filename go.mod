@@ -3,7 +3,7 @@ module github.com/ironpark/gvx-ext-github-actions
 go 1.27.0
 
 require (
-	github.com/ironpark/gvx-desktop v0.0.0
+	github.com/ironpark/gvx-desktop v0.10.3-0.20261125151926-0d74953d680d
 	github.com/moby/moby/api v1.54.0
 	github.com/nektos/act v0.2.98
 	github.com/sirupsen/logrus v1.9.4
@@ -37,7 +37,7 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
@@ -86,5 +86,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	tags.cncf.io/container-device-interface v1.1.0 // indirect
 )
-
-replace github.com/ironpark/gvx-desktop => ../gvx-desktop

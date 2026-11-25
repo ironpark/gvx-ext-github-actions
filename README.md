@@ -1,6 +1,6 @@
 # GVX Desktop Extension: GitHub Actions (`gvx-ext-github-actions`)
 
-Run GitHub Actions workflows locally with [`nektos/act`](https://github.com/nektos/act) and host isolated ephemeral GitHub Self-Hosted Runners inside GVX (`rungv`) sandboxes — directly inside GVX Desktop's native declarative UI.
+Run GitHub Actions workflows locally with [`nektos/act`](https://github.com/nektos/act) and host isolated ephemeral GitHub Self-Hosted Runners inside GVX (`rungvx`) sandboxes — directly inside GVX Desktop's native declarative UI.
 
 ## Features
 
@@ -34,4 +34,8 @@ go build -o bin/gvx-ext-github-actions ./cmd/gvx-ext-github-actions
 go test -race -count=1 ./...
 ```
 
-> **Note:** While `github.com/ironpark/gvx-desktop/pkg/extsdk` is being developed on `feat/ext`, `go.mod` uses `replace github.com/ironpark/gvx-desktop => ../gvx-desktop`. Remove the `replace` directive and pin a tagged `gvx-desktop` release before building standalone outside a sibling checkout.
+### Install in GVX Desktop
+
+1. Enable **Extensions** under **Labs** in GVX Desktop.
+2. Open **Extensions** in the sidebar and click **Install from Git**.
+3. Enter `https://github.com/ironpark/gvx-ext-github-actions`, review the requested permissions, and click **Allow and build**.
