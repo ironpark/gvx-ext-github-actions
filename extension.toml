@@ -1,0 +1,60 @@
+schema_version = 1
+id = "github-actions"
+version = "0.1.0"
+publisher = "ironpark"
+name = "GitHub Actions"
+description = "Run GitHub Actions workflows locally with act and host isolated GVX self-hosted runners."
+icon = "workflow"
+
+permissions = [
+  "docker",
+  "sandboxes",
+  "snapshots",
+  "secrets",
+  "storage",
+  "ui:pick-folder",
+  "ui:terminal",
+  "network",
+]
+
+[runtime]
+type = "sandbox"
+dockerfile = "Dockerfile"
+context = "."
+image = "ghcr.io/ironpark/gvx-ext-github-actions:0.1.0"
+port = 18900
+memory = "512m"
+cpus = "1"
+idle_timeout_sec = 0
+dev_entrypoint = "bin/gvx-ext-github-actions"
+
+[[contributes.view]]
+id = "main"
+title = "GitHub Actions"
+icon = "workflow"
+chrome = "toolbar"
+
+[[contributes.command]]
+id = "run-local"
+title = "Actions: Run Local Workflow"
+
+[[contributes.command]]
+id = "add-runner"
+title = "Actions: Add Self-Hosted Runner"
+
+[[contributes.tool]]
+id = "list_runners"
+description = "List configured GitHub self-hosted runners and their status."
+
+[[contributes.tool]]
+id = "run_local_workflow"
+description = "Run a local GitHub Actions workflow using act."
+[contributes.tool.params]
+repo_path = { type = "string", description = "Local repository path", required = true }
+workflow = { type = "string", description = "Workflow file name", required = false }
+job = { type = "string", description = "Specific job ID", required = false }
+
+[contributes.settings]
+default_act_image = { type = "string", label = "Default act runner image", description = "Container image mapped to ubuntu-latest when running locally.", default = "catthehacker/ubuntu:act-latest" }
+default_concurrency = { type = "number", label = "Default runner concurrency", default = 1 }
+github_pat = { type = "secret", label = "Default GitHub Token (PAT)", description = "Optional token for generating ephemeral runner JIT configs." }

@@ -1,0 +1,7 @@
+.git
+.gitignore
+bin/
+*.test
+*.out
+coverage.txt
+.DS_Store
