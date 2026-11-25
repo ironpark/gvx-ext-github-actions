@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	TabLocal   = "Local Workflows"
-	TabRunners = "Self-Hosted Runners"
-	TabHistory = "History"
+	TabLocal   = "local"
+	TabRunners = "runners"
+	TabHistory = "history"
 
-	HistoryFilterAll    = "All"
-	HistoryFilterLocal  = "Local (act)"
-	HistoryFilterRunner = "Self-Hosted"
+	HistoryFilterAll    = "all"
+	HistoryFilterLocal  = "local"
+	HistoryFilterRunner = "runner"
 
 	AllJobsOption = "All jobs"
 
@@ -119,6 +119,151 @@ func (c *Controller) SetBadgeHost(h interface {
 	c.mu.Lock()
 	c.badgeHost = h
 	c.mu.Unlock()
+}
+
+func (c *Controller) resolveLocale(explicit string) string {
+	if strings.TrimSpace(explicit) != "" {
+		return normalizeLocale(explicit)
+	}
+	if c.store != nil {
+		if loc := strings.TrimSpace(c.store.HostInfo().Locale); loc != "" {
+			return normalizeLocale(loc)
+		}
+	}
+	return LocaleEnglish
+}
+
+func tabLabel(loc, tab string) string {
+	switch tab {
+	case TabRunners:
+		return tr(loc, "tab.runners")
+	case TabHistory:
+		return tr(loc, "tab.history")
+	default:
+		return tr(loc, "tab.local")
+	}
+}
+
+func parseTabValue(val string) (string, bool) {
+	v := strings.TrimSpace(val)
+	switch v {
+	case TabLocal, "Local Workflows":
+		return TabLocal, true
+	case TabRunners, "Self-Hosted Runners":
+		return TabRunners, true
+	case TabHistory, "History":
+		return TabHistory, true
+	}
+	switch matchLocalizedKey(v, "tab.local", "tab.runners", "tab.history") {
+	case "tab.local":
+		return TabLocal, true
+	case "tab.runners":
+		return TabRunners, true
+	case "tab.history":
+		return TabHistory, true
+	}
+	return "", false
+}
+
+func historyFilterLabel(loc, filter string) string {
+	switch filter {
+	case HistoryFilterLocal:
+		return tr(loc, "history.filter_local")
+	case HistoryFilterRunner:
+		return tr(loc, "history.filter_runner")
+	default:
+		return tr(loc, "history.filter_all")
+	}
+}
+
+func parseHistoryFilterValue(val string) (string, bool) {
+	v := strings.TrimSpace(val)
+	switch v {
+	case HistoryFilterAll, "All":
+		return HistoryFilterAll, true
+	case HistoryFilterLocal, "Local (act)", "Local":
+		return HistoryFilterLocal, true
+	case HistoryFilterRunner, "Self-Hosted", "Runner":
+		return HistoryFilterRunner, true
+	}
+	switch matchLocalizedKey(v, "history.filter_all", "history.filter_local", "history.filter_runner") {
+	case "history.filter_all":
+		return HistoryFilterAll, true
+	case "history.filter_local":
+		return HistoryFilterLocal, true
+	case "history.filter_runner":
+		return HistoryFilterRunner, true
+	}
+	return "", false
+}
+
+func parseJobValue(val string) string {
+	v := strings.TrimSpace(val)
+	if v == "" || v == AllJobsOption || matchLocalizedKey(v, "local.all_jobs") == "local.all_jobs" {
+		return AllJobsOption
+	}
+	return v
+}
+
+func scopeLabel(loc, scope string) string {
+	if scope == "org" {
+		return tr(loc, "dlg.runner.scope_org")
+	}
+	return tr(loc, "dlg.runner.scope_repo")
+}
+
+func parseScopeValue(val string) string {
+	v := strings.TrimSpace(val)
+	if v == "org" || matchLocalizedKey(v, "dlg.runner.scope_org") == "dlg.runner.scope_org" {
+		return "org"
+	}
+	return "repo"
+}
+
+func authModeLabel(loc, mode string) string {
+	if mode == "jit" {
+		return tr(loc, "dlg.runner.auth_jit")
+	}
+	return tr(loc, "dlg.runner.auth_pat")
+}
+
+func parseAuthModeValue(val string) string {
+	v := strings.TrimSpace(val)
+	if v == "jit" || matchLocalizedKey(v, "dlg.runner.auth_jit") == "dlg.runner.auth_jit" {
+		return "jit"
+	}
+	return "pat"
+}
+
+func statusLabel(loc, st string) string {
+	switch strings.ToLower(strings.TrimSpace(st)) {
+	case "running":
+		return tr(loc, "status.running")
+	case "success", "succeeded":
+		return tr(loc, "status.success")
+	case "failure", "failed":
+		return tr(loc, "status.failure")
+	case "cancelled", "canceled":
+		return tr(loc, "status.cancelled")
+	case "skipped":
+		return tr(loc, "status.skipped")
+	case "standby":
+		return tr(loc, "status.standby")
+	case "running_job":
+		return tr(loc, "status.running_job")
+	case "starting":
+		return tr(loc, "status.starting")
+	case "cleaning":
+		return tr(loc, "status.cleaning")
+	case "error":
+		return tr(loc, "status.error")
+	case "stopped":
+		return tr(loc, "status.stopped")
+	case "pending":
+		return tr(loc, "status.pending")
+	default:
+		return st
+	}
 }
 
 // SyncSelectionDefaults ensures selected workspace, workflow, event, runner, and
@@ -248,6 +393,7 @@ func (c *Controller) UpdateBadge(ctx context.Context) {
 		return
 	}
 
+	loc := c.resolveLocale("")
 	localRunning, runnerSlots, runnerJobs := c.store.ActiveCounts()
 	var req extsdk.BadgeRequest
 	switch {
@@ -256,13 +402,13 @@ func (c *Controller) UpdateBadge(ctx context.Context) {
 		req = extsdk.BadgeRequest{
 			Text:    strconv.Itoa(total),
 			Tone:    "accent",
-			Tooltip: fmt.Sprintf("%d GitHub Actions job(s) running", total),
+			Tooltip: tr(loc, "badge.jobs_running", total),
 		}
 	case runnerSlots > 0:
 		req = extsdk.BadgeRequest{
 			Text:    strconv.Itoa(runnerSlots),
 			Tone:    "success",
-			Tooltip: fmt.Sprintf("%d self-hosted runner(s) standing by", runnerSlots),
+			Tooltip: tr(loc, "badge.runners_standby", runnerSlots),
 		}
 	default:
 		req = extsdk.BadgeRequest{Text: "", Tone: ""}
@@ -299,38 +445,44 @@ func (c *Controller) Register(app *extsdk.App) {
 }
 
 // Render builds the complete declarative extsdk.Node tree for the "main" view.
-func (c *Controller) Render(_ *extsdk.ViewContext, ui *extsdk.UI) extsdk.Node {
+func (c *Controller) Render(ctx *extsdk.ViewContext, ui *extsdk.UI) extsdk.Node {
+	rawLocale := ""
+	if ctx != nil {
+		rawLocale = ctx.Locale
+	}
+	loc := c.resolveLocale(rawLocale)
+
 	c.mu.Lock()
 	tab := c.activeTab
 	dlg := c.openDialog
 	c.mu.Unlock()
 
 	children := []any{
-		c.renderToolbar(ui, tab),
+		c.renderToolbar(ui, loc, tab),
 	}
 
 	switch tab {
 	case TabRunners:
-		children = append(children, c.renderRunnersTab(ui))
+		children = append(children, c.renderRunnersTab(ui, loc))
 	case TabHistory:
-		children = append(children, c.renderHistoryTab(ui))
+		children = append(children, c.renderHistoryTab(ui, loc))
 	default:
-		children = append(children, c.renderLocalTab(ui))
+		children = append(children, c.renderLocalTab(ui, loc))
 	}
 
 	if dlg != dialogNone {
-		children = append(children, c.renderDialog(ui, dlg))
+		children = append(children, c.renderDialog(ui, loc, dlg))
 	}
 
 	return ui.Column(children...).Fill(true).Gap(8)
 }
 
-func (c *Controller) renderToolbar(ui *extsdk.UI, activeTab string) extsdk.Node {
+func (c *Controller) renderToolbar(ui *extsdk.UI, loc, activeTab string) extsdk.Node {
 	hi := c.store.HostInfo()
-	dockerLabel := "Docker Off"
+	dockerLabel := tr(loc, "toolbar.docker_off")
 	dockerTone := "warning"
 	if hi.DockerReady || (c.localMgr != nil && c.localMgr.DockerHost() != "") {
-		dockerLabel = "Docker Ready"
+		dockerLabel = tr(loc, "toolbar.docker_ready")
 		dockerTone = "success"
 	}
 	archLabel := strings.ToLower(strings.TrimSpace(hi.Arch))
@@ -339,8 +491,15 @@ func (c *Controller) renderToolbar(ui *extsdk.UI, activeTab string) extsdk.Node 
 	}
 
 	items := []any{
-		ui.Tabs(activeTab, []string{TabLocal, TabRunners, TabHistory},
+		ui.Tabs(
+			tabLabel(loc, activeTab),
+			[]string{
+				tr(loc, "tab.local"),
+				tr(loc, "tab.runners"),
+				tr(loc, "tab.history"),
+			},
 			extsdk.Key("main_tabs"),
+			extsdk.Size("small"),
 			extsdk.OnChange("set_tab"),
 		),
 		ui.Pill(dockerLabel, extsdk.Tone(dockerTone), extsdk.Variant("soft")),
@@ -350,38 +509,44 @@ func (c *Controller) renderToolbar(ui *extsdk.UI, activeTab string) extsdk.Node 
 	switch activeTab {
 	case TabLocal:
 		items = append(items,
-			ui.Button(fmt.Sprintf("Secrets (%d)", len(c.store.SecretKeys())),
+			ui.Button(tr(loc, "toolbar.secrets", len(c.store.SecretKeys())),
 				extsdk.Key("tb_secrets"),
 				extsdk.Icon("key"),
+				extsdk.Size("small"),
 				extsdk.Variant("outline"),
 				extsdk.OnTap("open_secrets"),
 			),
 		)
 	case TabRunners:
 		items = append(items,
-			ui.Button("Add Runner",
+			ui.Button(tr(loc, "toolbar.add_runner"),
 				extsdk.Key("tb_add_runner"),
 				extsdk.Icon("plus"),
+				extsdk.Size("small"),
 				extsdk.Variant("primary"),
 				extsdk.OnTap("open_add_runner"),
 			),
 		)
 	case TabHistory:
 		items = append(items,
-			ui.Button("Clear Finished",
+			ui.Button(tr(loc, "toolbar.clear_finished"),
 				extsdk.Key("tb_clear_history"),
 				extsdk.Icon("trash"),
+				extsdk.Size("small"),
 				extsdk.Variant("ghost"),
+				extsdk.Placeholder(tr(loc, "toolbar.clear_finished_tip")),
 				extsdk.OnTap("clear_history"),
 			),
 		)
 	}
 
 	items = append(items,
-		ui.Button("Refresh",
+		ui.Button("",
 			extsdk.Key("tb_refresh"),
 			extsdk.Icon("refresh-cw"),
+			extsdk.Size("small"),
 			extsdk.Variant("ghost"),
+			extsdk.Placeholder(tr(loc, "toolbar.refresh")),
 			extsdk.OnTap("refresh"),
 		),
 	)
@@ -390,7 +555,7 @@ func (c *Controller) renderToolbar(ui *extsdk.UI, activeTab string) extsdk.Node 
 
 // --- Tab 1: Local Workflows (nektos/act) ---
 
-func (c *Controller) renderLocalTab(ui *extsdk.UI) extsdk.Node {
+func (c *Controller) renderLocalTab(ui *extsdk.UI, loc string) extsdk.Node {
 	c.mu.Lock()
 	selWS := c.selectedWorkspace
 	wfs := slices.Clone(c.discovered[selWS])
@@ -409,11 +574,6 @@ func (c *Controller) renderLocalTab(ui *extsdk.UI) extsdk.Node {
 	workspaces := c.store.Workspaces()
 	hi := c.store.HostInfo()
 
-	// Left pane: Repositories + Workflow Config.
-	leftChildren := []any{
-		c.renderWorkspaceCard(ui, workspaces, selWS),
-	}
-
 	var activeWF *workflows.WorkflowSummary
 	for i := range wfs {
 		if wfs[i].File == selWF {
@@ -422,15 +582,22 @@ func (c *Controller) renderLocalTab(ui *extsdk.UI) extsdk.Node {
 		}
 	}
 
-	if selWS != "" {
-		leftChildren = append(leftChildren, c.renderWorkflowConfigCard(ui, selWS, wfs, activeWF, selEvent, selJob, platImg, bindWD, dispInputs, hi, selRunID))
+	var leftPane extsdk.Node
+	if len(workspaces) == 0 {
+		leftPane = c.renderWorkspaceEmptyPane(ui, loc)
+	} else {
+		leftChildren := []any{
+			c.renderWorkspaceCard(ui, loc, workspaces, selWS),
+		}
+		if selWS != "" {
+			leftChildren = append(leftChildren, c.renderWorkflowConfigCard(ui, loc, selWS, wfs, activeWF, selEvent, selJob, platImg, bindWD, dispInputs, hi, selRunID))
+		}
+		leftPane = ui.Scroll(
+			extsdk.Key("local_left_scroll"),
+			extsdk.Grow(1),
+			ui.Column(leftChildren...).Gap(10),
+		)
 	}
-
-	leftPane := ui.Scroll(
-		extsdk.Key("local_left_scroll"),
-		extsdk.Grow(1),
-		ui.Column(leftChildren...).Gap(10),
-	)
 
 	// Right pane: Live Job/Step DAG + Streaming Masked Logs.
 	var activeRun *state.RunRecord
@@ -445,68 +612,124 @@ func (c *Controller) renderLocalTab(ui *extsdk.UI) extsdk.Node {
 			}
 		}
 	}
-	rightPane := c.renderLocalRunPane(ui, activeRun, activeWF)
+	rightPane := c.renderLocalRunPane(ui, loc, activeRun, activeWF, hi)
 
 	return ui.Split("auto", leftPane, rightPane, extsdk.Key("local_split"), extsdk.Ratio(0.40), extsdk.Grow(1))
 }
 
-func (c *Controller) renderWorkspaceCard(ui *extsdk.UI, workspaces []state.Workspace, selWS string) extsdk.Node {
+func (c *Controller) renderWorkspaceEmptyPane(ui *extsdk.UI, loc string) extsdk.Node {
 	header := ui.Row(
 		ui.Icon("folder", extsdk.Tone("accent")),
-		ui.Text("Repositories", extsdk.Weight("semibold"), extsdk.Grow(1)),
-		ui.Button("Add Repo",
+		ui.Text(tr(loc, "local.repositories"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+		ui.Button(tr(loc, "local.add_repo"),
 			extsdk.Key("btn_pick_repo"),
 			extsdk.Icon("folder-plus"),
+			extsdk.Size("small"),
 			extsdk.Variant("secondary"),
 			extsdk.OnTap("pick_repo"),
 		),
 	).Gap(8)
 
-	rows := []any{header}
-	if len(workspaces) == 0 {
+	emptyHero := ui.Card(
+		extsdk.Key("card_workspaces_empty"),
+		extsdk.Variant("soft"),
+		extsdk.Gap(8),
+		ui.Row(
+			ui.Icon("folder-git-2", extsdk.Tone("accent")),
+			ui.Text(tr(loc, "local.empty_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+		).Gap(8),
+		ui.Text(tr(loc, "local.empty_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Row(
+			ui.Button(tr(loc, "local.add_repo_cta"),
+				extsdk.Key("btn_pick_repo_cta"),
+				extsdk.Icon("folder-plus"),
+				extsdk.Variant("primary"),
+				extsdk.Size("small"),
+				extsdk.OnTap("pick_repo"),
+			),
+		).Gap(8),
+	)
+
+	guideCard := ui.Card(
+		extsdk.Key("card_local_guide"),
+		extsdk.Variant("outline"),
+		extsdk.Gap(6),
+		ui.Row(
+			ui.Icon("sparkles", extsdk.Tone("muted")),
+			ui.Text(tr(loc, "local.quick_start"), extsdk.Weight("medium"), extsdk.Size("small")),
+		).Gap(6),
+		ui.Text(tr(loc, "local.step1"), extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Text(tr(loc, "local.step2"), extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Text(tr(loc, "local.step3"), extsdk.Tone("muted"), extsdk.Size("small")),
+	)
+
+	return ui.Card(
+		extsdk.Key("card_workspaces"),
+		extsdk.Grow(1),
+		extsdk.Gap(10),
+		header,
+		ui.Divider(),
+		emptyHero,
+		guideCard,
+	)
+}
+
+func (c *Controller) renderWorkspaceCard(ui *extsdk.UI, loc string, workspaces []state.Workspace, selWS string) extsdk.Node {
+	header := ui.Row(
+		ui.Icon("folder", extsdk.Tone("accent")),
+		ui.Text(tr(loc, "local.repositories"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+		ui.Button(tr(loc, "local.add_repo"),
+			extsdk.Key("btn_pick_repo"),
+			extsdk.Icon("folder-plus"),
+			extsdk.Size("small"),
+			extsdk.Variant("secondary"),
+			extsdk.OnTap("pick_repo"),
+		),
+	).Gap(8)
+
+	rows := []any{header, ui.Divider()}
+	for i, ws := range workspaces {
+		selected := ws.Path == selWS
+		tone := ""
+		variant := "ghost"
+		if selected {
+			tone = "accent"
+			variant = "secondary"
+		}
 		rows = append(rows,
-			ui.Text("Add a local Git repository with .github/workflows to run workflows locally with act.", extsdk.Tone("muted")),
+			ui.Row(
+				extsdk.Key(fmt.Sprintf("ws_%d", i)),
+				ui.Button(mask.TruncateRunes(mask.SanitizeInline(ws.Name), 40),
+					extsdk.Key(fmt.Sprintf("ws_sel_%d", i)),
+					extsdk.Icon("git-branch"),
+					extsdk.Size("small"),
+					extsdk.Variant(variant),
+					extsdk.Tone(tone),
+					extsdk.Grow(1),
+					extsdk.OnTap("select_workspace", ws.Path),
+				),
+				ui.Button("",
+					extsdk.Key(fmt.Sprintf("ws_rm_%d", i)),
+					extsdk.Icon("trash"),
+					extsdk.Size("small"),
+					extsdk.Variant("ghost"),
+					extsdk.Placeholder(tr(loc, "local.remove_repo_tip")),
+					extsdk.OnTap("remove_workspace", ws.Path),
+				),
+			).Gap(4),
 		)
-	} else {
-		for i, ws := range workspaces {
-			selected := ws.Path == selWS
-			tone := ""
-			variant := "ghost"
-			if selected {
-				tone = "accent"
-				variant = "secondary"
-			}
-			rows = append(rows,
-				ui.Row(
-					extsdk.Key(fmt.Sprintf("ws_%d", i)),
-					ui.Button(mask.TruncateRunes(mask.SanitizeInline(ws.Name), 40),
-						extsdk.Key(fmt.Sprintf("ws_sel_%d", i)),
-						extsdk.Icon("git-branch"),
-						extsdk.Variant(variant),
-						extsdk.Tone(tone),
-						extsdk.Grow(1),
-						extsdk.OnTap("select_workspace", ws.Path),
-					),
-					ui.Button("",
-						extsdk.Key(fmt.Sprintf("ws_rm_%d", i)),
-						extsdk.Icon("trash"),
-						extsdk.Variant("ghost"),
-						extsdk.Placeholder("Remove repository"),
-						extsdk.OnTap("remove_workspace", ws.Path),
-					),
-				).Gap(4),
-			)
-		}
-		if selWS != "" {
-			rows = append(rows, ui.Text(mask.TruncateRunes(mask.SanitizeInline(selWS), 90), extsdk.Tone("faint"), extsdk.Size("small")))
-		}
+	}
+	if selWS != "" {
+		rows = append(rows, ui.Text(mask.TruncateRunes(mask.SanitizeInline(selWS), 90), extsdk.Tone("faint"), extsdk.Size("small")))
 	}
 
-	return ui.Card(extsdk.Key("card_workspaces"), ui.Column(rows...).Gap(6))
+	args := append([]any{extsdk.Key("card_workspaces"), extsdk.Gap(8)}, rows...)
+	return ui.Card(args...)
 }
 
 func (c *Controller) renderWorkflowConfigCard(
 	ui *extsdk.UI,
+	loc string,
 	repoPath string,
 	wfs []workflows.WorkflowSummary,
 	activeWF *workflows.WorkflowSummary,
@@ -519,15 +742,17 @@ func (c *Controller) renderWorkflowConfigCard(
 	items := []any{
 		ui.Row(
 			ui.Icon("file-code", extsdk.Tone("accent")),
-			ui.Text("Workflow Configuration", extsdk.Weight("semibold"), extsdk.Grow(1)),
+			ui.Text(tr(loc, "local.workflow_config"), extsdk.Weight("semibold"), extsdk.Grow(1)),
 		).Gap(8),
+		ui.Divider(),
 	}
 
 	if len(wfs) == 0 {
 		items = append(items,
-			ui.Text("No .github/workflows/*.yml files found in "+mask.SanitizeInline(filepath.Base(repoPath))+".", extsdk.Tone("muted")),
+			ui.Text(tr(loc, "local.no_workflows", mask.SanitizeInline(filepath.Base(repoPath))), extsdk.Tone("muted"), extsdk.Size("small")),
 		)
-		return ui.Card(extsdk.Key("card_wf_cfg"), ui.Column(items...).Gap(8))
+		args := append([]any{extsdk.Key("card_wf_cfg"), extsdk.Gap(8)}, items...)
+		return ui.Card(args...)
 	}
 
 	wfOptions := make([]string, 0, len(wfs))
@@ -540,7 +765,7 @@ func (c *Controller) renderWorkflowConfigCard(
 	}
 
 	items = append(items,
-		ui.Text("Workflow file", extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Text(tr(loc, "local.workflow_file"), extsdk.Tone("muted"), extsdk.Size("small")),
 		ui.Select(wfOptions, selFile, extsdk.Key("wf_select"), extsdk.OnChange("select_workflow")),
 	)
 
@@ -548,10 +773,11 @@ func (c *Controller) renderWorkflowConfigCard(
 		items = append(items,
 			ui.Card(
 				extsdk.Variant("danger"),
-				ui.Text("YAML parse error: "+mask.TruncateRunes(mask.SanitizeInline(activeWF.ParseError), 220), extsdk.Tone("danger")),
+				ui.Text(tr(loc, "local.yaml_error", mask.TruncateRunes(mask.SanitizeInline(activeWF.ParseError), 220)), extsdk.Tone("danger"), extsdk.Size("small")),
 			),
 		)
-		return ui.Card(extsdk.Key("card_wf_cfg"), ui.Column(items...).Gap(8))
+		args := append([]any{extsdk.Key("card_wf_cfg"), extsdk.Gap(8)}, items...)
+		return ui.Card(args...)
 	}
 
 	if activeWF != nil {
@@ -563,32 +789,34 @@ func (c *Controller) renderWorkflowConfigCard(
 			selEvent = events[0]
 		}
 
-		jobOpts := []string{AllJobsOption}
+		allJobsLabel := tr(loc, "local.all_jobs")
+		jobOpts := []string{allJobsLabel}
 		for _, j := range activeWF.Jobs {
 			jobOpts = append(jobOpts, j.ID)
 		}
-		if !slices.Contains(jobOpts, selJob) {
-			selJob = AllJobsOption
+		selJobDisplay := selJob
+		if selJob == AllJobsOption || !slices.Contains(jobOpts, selJob) {
+			selJobDisplay = allJobsLabel
 		}
 
 		items = append(items,
 			ui.Row(
 				ui.Column(
-					ui.Text("Trigger event", extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Text(tr(loc, "local.trigger_event"), extsdk.Tone("muted"), extsdk.Size("small")),
 					ui.Select(events, selEvent, extsdk.Key("event_select"), extsdk.OnChange("select_event")),
 				).Gap(4).Grow(1),
 				ui.Column(
-					ui.Text("Job", extsdk.Tone("muted"), extsdk.Size("small")),
-					ui.Select(jobOpts, selJob, extsdk.Key("job_select"), extsdk.OnChange("select_job")),
+					ui.Text(tr(loc, "local.job"), extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Select(jobOpts, selJobDisplay, extsdk.Key("job_select"), extsdk.OnChange("select_job")),
 				).Gap(4).Grow(1),
 			).Gap(8),
-			ui.Text("Runner image (ubuntu-latest mapping)", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "local.runner_image"), extsdk.Tone("muted"), extsdk.Size("small")),
 			ui.Input(platImg,
 				extsdk.Key("platform_image"),
 				extsdk.Placeholder(state.DefaultActImage),
 				extsdk.OnChange("set_platform_image"),
 			),
-			ui.Toggle(bindWD, "Bind workspace directory directly (faster, mutates repo)",
+			ui.Toggle(bindWD, tr(loc, "local.bind_workdir"),
 				extsdk.Key("bind_workdir"),
 				extsdk.OnChange("toggle_bind_workdir"),
 			),
@@ -596,7 +824,7 @@ func (c *Controller) renderWorkflowConfigCard(
 
 		if selEvent == "workflow_dispatch" && len(activeWF.DispatchInputs) > 0 {
 			inputNodes := []any{
-				ui.Text("workflow_dispatch inputs", extsdk.Weight("medium"), extsdk.Size("small")),
+				ui.Text(tr(loc, "local.dispatch_inputs"), extsdk.Weight("medium"), extsdk.Size("small")),
 			}
 			for _, in := range activeWF.DispatchInputs {
 				val := dispInputs[in.Name]
@@ -629,7 +857,8 @@ func (c *Controller) renderWorkflowConfigCard(
 					)
 				}
 			}
-			items = append(items, ui.Card(extsdk.Key("card_dispatch_inputs"), extsdk.Variant("soft"), ui.Column(inputNodes...).Gap(4)))
+			cardArgs := append([]any{extsdk.Key("card_dispatch_inputs"), extsdk.Variant("soft"), extsdk.Gap(6)}, inputNodes...)
+			items = append(items, ui.Card(cardArgs...))
 		}
 
 		if activeWF.HasAMD64OnlyHint(hi.Arch) {
@@ -639,7 +868,7 @@ func (c *Controller) renderWorkflowConfigCard(
 					extsdk.Variant("soft"),
 					ui.Row(
 						ui.Icon("info", extsdk.Tone("accent")),
-						ui.Text("Apple Silicon (arm64): containers run natively on linux/arm64. Use multi-arch images or enable GVX amd64 micro-VM if a step downloads amd64-only tools.",
+						ui.Text(tr(loc, "local.arm64_hint"),
 							extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
 					).Gap(6),
 				),
@@ -654,24 +883,27 @@ func (c *Controller) renderWorkflowConfigCard(
 		}
 
 		actionRow := []any{
-			ui.Button("Run Workflow",
+			ui.Button(tr(loc, "local.run_workflow"),
 				extsdk.Key("btn_run_local"),
 				extsdk.Icon("play"),
+				extsdk.Size("small"),
 				extsdk.Variant("primary"),
 				extsdk.OnTap("run_local"),
 			),
-			ui.Button("Dry Run",
+			ui.Button(tr(loc, "local.dry_run"),
 				extsdk.Key("btn_dryrun_local"),
 				extsdk.Icon("eye"),
+				extsdk.Size("small"),
 				extsdk.Variant("outline"),
 				extsdk.OnTap("dryrun_local"),
 			),
 		}
 		if isRunning {
 			actionRow = append(actionRow,
-				ui.Button("Cancel",
+				ui.Button(tr(loc, "local.cancel"),
 					extsdk.Key("btn_cancel_local"),
 					extsdk.Icon("square"),
+					extsdk.Size("small"),
 					extsdk.Variant("danger"),
 					extsdk.OnTap("cancel_local_run", selRunID),
 				),
@@ -680,12 +912,12 @@ func (c *Controller) renderWorkflowConfigCard(
 		items = append(items, ui.Row(actionRow...).Gap(8))
 	}
 
-	return ui.Card(extsdk.Key("card_wf_cfg"), ui.Column(items...).Gap(8))
+	args := append([]any{extsdk.Key("card_wf_cfg"), extsdk.Gap(8)}, items...)
+	return ui.Card(args...)
 }
 
-func (c *Controller) renderLocalRunPane(ui *extsdk.UI, run *state.RunRecord, activeWF *workflows.WorkflowSummary) extsdk.Node {
+func (c *Controller) renderLocalRunPane(ui *extsdk.UI, loc string, run *state.RunRecord, activeWF *workflows.WorkflowSummary, hi extsdk.HostInfo) extsdk.Node {
 	if run == nil {
-		// Show static workflow DAG preview if a workflow is selected.
 		var previewRows []extsdk.DagRow
 		if activeWF != nil && activeWF.ParseError == "" {
 			for _, j := range activeWF.Jobs {
@@ -703,63 +935,142 @@ func (c *Controller) renderLocalRunPane(ui *extsdk.UI, run *state.RunRecord, act
 					Parents: parents,
 					Text:    mask.TruncateRunes(mask.SanitizeInline(j.Name), 120),
 					Detail:  mask.TruncateRunes(mask.SanitizeInline(strings.Join(j.RunsOn, ", ")), 120),
-					Meta:    fmt.Sprintf("%d step(s)", len(j.Steps)),
+					Meta:    tr(loc, "local.steps_count", len(j.Steps)),
 					Tone:    "muted",
 					Icon:    "workflow",
 				})
 			}
 		}
+
+		dockerText := tr(loc, "toolbar.docker_off")
+		dockerTone := "warning"
+		if hi.DockerReady || (c.localMgr != nil && c.localMgr.DockerHost() != "") {
+			dockerText = tr(loc, "toolbar.docker_ready")
+			dockerTone = "success"
+		}
+		archLabel := strings.ToLower(strings.TrimSpace(hi.Arch))
+		if archLabel == "" {
+			archLabel = "linux"
+		}
+		defaultImg := c.store.Settings().DefaultActImage
+		if defaultImg == "" {
+			defaultImg = state.DefaultActImage
+		}
+
 		nodes := []any{
 			ui.Row(
-				ui.Icon("activity", extsdk.Tone("muted")),
-				ui.Text("Execution & Logs", extsdk.Weight("semibold"), extsdk.Grow(1)),
+				ui.Icon("activity", extsdk.Tone("accent")),
+				ui.Text(tr(loc, "local.exec_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				ui.Pill(tr(loc, "local.idle"), extsdk.Tone("muted"), extsdk.Variant("soft")),
 			).Gap(8),
-			ui.Text("Click Run Workflow to execute locally via nektos/act on GVX Sandbox Engine.", extsdk.Tone("muted")),
+			ui.Divider(),
 		}
+
 		if len(previewRows) > 0 {
 			nodes = append(nodes,
-				ui.Text("Workflow Job Graph (Preview)", extsdk.Tone("muted"), extsdk.Size("small")),
-				ui.Dag(previewRows, extsdk.Key("dag_preview"), extsdk.MaxHeight(260)),
+				ui.Card(
+					extsdk.Key("local_run_ready_banner"),
+					extsdk.Variant("soft"),
+					ui.Row(
+						ui.Icon("workflow", extsdk.Tone("accent")),
+						ui.Text(tr(loc, "local.ready_with_wf_desc"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+					).Gap(8),
+				),
+				ui.Text(tr(loc, "local.job_graph_preview"), extsdk.Weight("medium"), extsdk.Size("small")),
+				ui.Dag(previewRows, extsdk.Key("dag_preview"), extsdk.MaxHeight(320), extsdk.Grow(1)),
+			)
+		} else {
+			nodes = append(nodes,
+				ui.Card(
+					extsdk.Key("local_run_ready_card"),
+					extsdk.Variant("soft"),
+					extsdk.Gap(6),
+					ui.Row(
+						ui.Icon("terminal", extsdk.Tone("accent")),
+						ui.Text(tr(loc, "local.ready_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+					).Gap(8),
+					ui.Text(tr(loc, "local.ready_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
+				),
+				ui.Card(
+					extsdk.Key("local_env_summary"),
+					extsdk.Variant("outline"),
+					extsdk.Gap(8),
+					ui.Row(
+						ui.Icon("cpu", extsdk.Tone("muted")),
+						ui.Text(tr(loc, "local.env_title"), extsdk.Weight("medium"), extsdk.Size("small"), extsdk.Grow(1)),
+					).Gap(6),
+					ui.Row(
+						ui.Text(tr(loc, "local.env_engine"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+						ui.Pill(dockerText, extsdk.Tone(dockerTone), extsdk.Variant("soft")),
+					).Gap(8),
+					ui.Row(
+						ui.Text(tr(loc, "local.env_arch"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+						ui.Chip(archLabel),
+					).Gap(8),
+					ui.Row(
+						ui.Text(tr(loc, "local.env_default_image"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+						ui.Chip(mask.TruncateRunes(defaultImg, 42)),
+					).Gap(8),
+					ui.Row(
+						ui.Text(tr(loc, "local.env_secrets"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+						ui.Text(tr(loc, "local.env_secrets_count", len(c.store.SecretKeys())), extsdk.Tone("muted"), extsdk.Size("small")),
+						ui.Button(tr(loc, "local.manage_secrets"),
+							extsdk.Key("btn_env_secrets"),
+							extsdk.Icon("key"),
+							extsdk.Size("small"),
+							extsdk.Variant("outline"),
+							extsdk.OnTap("open_secrets"),
+						),
+					).Gap(8),
+				),
 			)
 		}
-		return ui.Card(extsdk.Key("local_run_empty"), extsdk.Grow(1), ui.Column(nodes...).Gap(8))
+
+		args := append([]any{extsdk.Key("local_run_empty"), extsdk.Grow(1), extsdk.Gap(10)}, nodes...)
+		return ui.Card(args...)
 	}
 
 	headerItems := []any{
 		ui.Icon(statusIcon(run.Status), extsdk.Tone(statusTone(run.Status))),
 		ui.Text(mask.TruncateRunes(mask.SanitizeInline(runTitle(run)), 70), extsdk.Weight("semibold"), extsdk.Grow(1)),
-		ui.Pill(run.Status, extsdk.Tone(statusTone(run.Status)), extsdk.Variant("soft")),
+		ui.Pill(statusLabel(loc, run.Status), extsdk.Tone(statusTone(run.Status)), extsdk.Variant("soft")),
 	}
 	if run.ContainerID != "" {
 		headerItems = append(headerItems,
-			ui.Button("Open Shell",
+			ui.Button(tr(loc, "local.open_shell"),
 				extsdk.Key("btn_open_shell_local"),
 				extsdk.Icon("terminal"),
+				extsdk.Size("small"),
 				extsdk.Variant("outline"),
 				extsdk.OnTap("open_shell", "container", run.ContainerID),
 			),
 		)
 	}
 	headerItems = append(headerItems,
-		ui.Button("Copy Logs",
+		ui.Button(tr(loc, "local.copy_logs"),
 			extsdk.Key("btn_copy_local_logs"),
 			extsdk.Icon("copy"),
+			extsdk.Size("small"),
 			extsdk.Variant("ghost"),
 			extsdk.OnTap("copy_logs", run.ID),
 		),
 	)
 
-	dagRows := buildDagRows(run.Steps)
-	logText := formatLogsForCode(run.Logs, c.redactor)
+	dagRows := buildDagRows(loc, run.Steps)
+	logText := formatLogsForCode(loc, run.Logs, c.redactor)
 
 	colItems := []any{
 		ui.Row(headerItems...).Gap(6),
-		ui.Text(mask.SanitizeInline(fmt.Sprintf("Event: %s · Image: %s · Duration: %s", run.Event, run.PlatformImage, formatDuration(run.StartedAt, run.FinishedAt))),
+		ui.Text(mask.SanitizeInline(tr(loc, "local.run_meta", run.Event, run.PlatformImage, formatDuration(run.StartedAt, run.FinishedAt))),
 			extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Divider(),
 	}
 	if run.Error != "" {
 		colItems = append(colItems,
-			ui.Text("Error: "+mask.TruncateRunes(mask.SanitizeInline(run.Error), 240), extsdk.Tone("danger"), extsdk.Size("small")),
+			ui.Card(
+				extsdk.Variant("danger"),
+				ui.Text(tr(loc, "local.error_prefix", mask.TruncateRunes(mask.SanitizeInline(run.Error), 240)), extsdk.Tone("danger"), extsdk.Size("small")),
+			),
 		)
 	}
 	if len(dagRows) > 0 {
@@ -768,7 +1079,7 @@ func (c *Controller) renderLocalRunPane(ui *extsdk.UI, run *state.RunRecord, act
 		)
 	}
 	colItems = append(colItems,
-		ui.Text("Live Output (secrets masked)", extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Text(tr(loc, "local.live_output"), extsdk.Tone("muted"), extsdk.Size("small")),
 		ui.Scroll(
 			extsdk.Key("local_log_scroll"),
 			extsdk.Variant("follow"),
@@ -777,12 +1088,13 @@ func (c *Controller) renderLocalRunPane(ui *extsdk.UI, run *state.RunRecord, act
 		),
 	)
 
-	return ui.Card(extsdk.Key("local_run_pane"), extsdk.Grow(1), ui.Column(colItems...).Gap(6))
+	args := append([]any{extsdk.Key("local_run_pane"), extsdk.Grow(1), extsdk.Gap(8)}, colItems...)
+	return ui.Card(args...)
 }
 
 // --- Tab 2: Self-Hosted Runners (Engine A) ---
 
-func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
+func (c *Controller) renderRunnersTab(ui *extsdk.UI, loc string) extsdk.Node {
 	c.mu.Lock()
 	selID := c.selectedRunnerID
 	c.mu.Unlock()
@@ -790,42 +1102,71 @@ func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
 	configs := c.store.Runners()
 	allSlots := c.store.AllRunnerSlots()
 	hi := c.store.HostInfo()
+	isARM64 := strings.EqualFold(hi.Arch, "arm64") || strings.EqualFold(hi.Arch, "aarch64")
 
-	leftItems := []any{}
-	if strings.EqualFold(hi.Arch, "arm64") || strings.EqualFold(hi.Arch, "aarch64") {
-		leftItems = append(leftItems,
-			ui.Card(
-				extsdk.Key("runner_arm64_banner"),
-				extsdk.Variant("soft"),
-				ui.Row(
-					ui.Icon("cpu", extsdk.Tone("accent")),
-					ui.Text("Apple Silicon (arm64): runners default to labels [self-hosted, linux, arm64, gvx]. Target them with runs-on: [self-hosted, linux, arm64].",
-						extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
-				).Gap(6),
-			),
-		)
-	}
-
+	var leftPane extsdk.Node
 	if len(configs) == 0 {
-		leftItems = append(leftItems,
+		emptyItems := []any{
+			ui.Row(
+				ui.Icon("server", extsdk.Tone("accent")),
+				ui.Text(tr(loc, "runners.title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				ui.Button(tr(loc, "toolbar.add_runner"),
+					extsdk.Key("btn_add_runner_hdr"),
+					extsdk.Icon("plus"),
+					extsdk.Size("small"),
+					extsdk.Variant("secondary"),
+					extsdk.OnTap("open_add_runner"),
+				),
+			).Gap(8),
+			ui.Divider(),
 			ui.Card(
 				extsdk.Key("runners_empty"),
-				ui.Column(
-					ui.Row(
-						ui.Icon("server", extsdk.Tone("accent")),
-						ui.Text("No Self-Hosted Runners Configured", extsdk.Weight("semibold")),
-					).Gap(8),
-					ui.Text("Engine A runs GitHub's official actions/runner inside ephemeral GVX sandboxes using outbound long-polling (works behind NAT). After every job, the sandbox is destroyed and replenished automatically.", extsdk.Tone("muted")),
-					ui.Button("Add Self-Hosted Runner",
+				extsdk.Variant("soft"),
+				extsdk.Gap(8),
+				ui.Row(
+					ui.Icon("server", extsdk.Tone("accent")),
+					ui.Text(tr(loc, "runners.empty_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				).Gap(8),
+				ui.Text(tr(loc, "runners.empty_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
+				ui.Row(
+					ui.Button(tr(loc, "runners.add_btn"),
 						extsdk.Key("btn_add_runner_empty"),
 						extsdk.Icon("plus"),
+						extsdk.Size("small"),
 						extsdk.Variant("primary"),
 						extsdk.OnTap("open_add_runner"),
 					),
 				).Gap(8),
 			),
-		)
+		}
+		if isARM64 {
+			emptyItems = append(emptyItems,
+				ui.Card(
+					extsdk.Key("runner_arm64_banner"),
+					extsdk.Variant("outline"),
+					ui.Row(
+						ui.Icon("cpu", extsdk.Tone("accent")),
+						ui.Text(tr(loc, "runners.arm64_banner"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+					).Gap(6),
+				),
+			)
+		}
+		args := append([]any{extsdk.Key("runners_left_empty"), extsdk.Grow(1), extsdk.Gap(10)}, emptyItems...)
+		leftPane = ui.Card(args...)
 	} else {
+		leftItems := []any{}
+		if isARM64 {
+			leftItems = append(leftItems,
+				ui.Card(
+					extsdk.Key("runner_arm64_banner"),
+					extsdk.Variant("soft"),
+					ui.Row(
+						ui.Icon("cpu", extsdk.Tone("accent")),
+						ui.Text(tr(loc, "runners.arm64_banner"), extsdk.Tone("muted"), extsdk.Size("small"), extsdk.Grow(1)),
+					).Gap(6),
+				),
+			)
+		}
 		for _, cfg := range configs {
 			slots := allSlots[cfg.ID]
 			selected := cfg.ID == selID
@@ -841,21 +1182,21 @@ func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
 				}
 			}
 
-			statusText := "Stopped"
+			statusText := tr(loc, "runners.status_stopped")
 			statusT := "muted"
 			if cfg.Enabled {
 				switch {
 				case busy > 0:
-					statusText = fmt.Sprintf("Running (%d/%d)", busy, cfg.Concurrency)
+					statusText = tr(loc, "runners.status_running", busy, cfg.Concurrency)
 					statusT = "accent"
 				case standby > 0:
-					statusText = fmt.Sprintf("Standby (%d/%d)", standby, cfg.Concurrency)
+					statusText = tr(loc, "runners.status_standby", standby, cfg.Concurrency)
 					statusT = "success"
 				case errCnt > 0:
-					statusText = "Error"
+					statusText = tr(loc, "runners.status_error")
 					statusT = "danger"
 				default:
-					statusText = "Starting"
+					statusText = tr(loc, "runners.status_starting")
 					statusT = "warning"
 				}
 			}
@@ -872,12 +1213,12 @@ func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
 				cardVariant = "secondary"
 			}
 
-			toggleLabel := "Start"
+			toggleLabel := tr(loc, "runners.start")
 			toggleIcon := "play"
 			toggleAction := "start_runner"
 			toggleVar := "primary"
 			if cfg.Enabled {
-				toggleLabel = "Stop"
+				toggleLabel = tr(loc, "runners.stop")
 				toggleIcon = "square"
 				toggleAction = "stop_runner"
 				toggleVar = "outline"
@@ -887,46 +1228,47 @@ func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
 				ui.Card(
 					extsdk.Key("runner_card_"+cfg.ID),
 					extsdk.Variant(cardVariant),
-					ui.Column(
-						ui.Row(
-							ui.Button(mask.TruncateRunes(mask.SanitizeInline(cfg.Name), 36),
-								extsdk.Key("runner_sel_"+cfg.ID),
-								extsdk.Icon("server"),
-								extsdk.Variant("ghost"),
-								extsdk.Badges(badges...),
-								extsdk.Grow(1),
-								extsdk.OnTap("select_runner", cfg.ID),
-							),
-						).Gap(6),
-						ui.Text(mask.SanitizeInline(fmt.Sprintf("%s · %s · concurrency %d · labels: %s",
-							cfg.Scope, cfg.Target, cfg.Concurrency, strings.Join(cfg.Labels, ", "))),
-							extsdk.Tone("muted"), extsdk.Size("small")),
-						ui.Row(
-							ui.Button(toggleLabel,
-								extsdk.Key("runner_toggle_"+cfg.ID),
-								extsdk.Icon(toggleIcon),
-								extsdk.Variant(toggleVar),
-								extsdk.OnTap(toggleAction, cfg.ID),
-							),
-							ui.Button("Delete",
-								extsdk.Key("runner_del_"+cfg.ID),
-								extsdk.Icon("trash"),
-								extsdk.Variant("ghost"),
-								extsdk.Tone("danger"),
-								extsdk.OnTap("delete_runner", cfg.ID),
-							),
-						).Gap(6),
+					extsdk.Gap(8),
+					ui.Row(
+						ui.Button(mask.TruncateRunes(mask.SanitizeInline(cfg.Name), 36),
+							extsdk.Key("runner_sel_"+cfg.ID),
+							extsdk.Icon("server"),
+							extsdk.Size("small"),
+							extsdk.Variant("ghost"),
+							extsdk.Badges(badges...),
+							extsdk.Grow(1),
+							extsdk.OnTap("select_runner", cfg.ID),
+						),
+					).Gap(6),
+					ui.Text(mask.SanitizeInline(tr(loc, "runners.meta_line",
+						scopeLabel(loc, cfg.Scope), cfg.Target, cfg.Concurrency, strings.Join(cfg.Labels, ", "))),
+						extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Row(
+						ui.Button(toggleLabel,
+							extsdk.Key("runner_toggle_"+cfg.ID),
+							extsdk.Icon(toggleIcon),
+							extsdk.Size("small"),
+							extsdk.Variant(toggleVar),
+							extsdk.OnTap(toggleAction, cfg.ID),
+						),
+						ui.Button(tr(loc, "runners.delete"),
+							extsdk.Key("runner_del_"+cfg.ID),
+							extsdk.Icon("trash"),
+							extsdk.Size("small"),
+							extsdk.Variant("ghost"),
+							extsdk.Tone("danger"),
+							extsdk.OnTap("delete_runner", cfg.ID),
+						),
 					).Gap(6),
 				),
 			)
 		}
+		leftPane = ui.Scroll(
+			extsdk.Key("runners_left_scroll"),
+			extsdk.Grow(1),
+			ui.Column(leftItems...).Gap(8),
+		)
 	}
-
-	leftPane := ui.Scroll(
-		extsdk.Key("runners_left_scroll"),
-		extsdk.Grow(1),
-		ui.Column(leftItems...).Gap(8),
-	)
 
 	var selCfg *state.RunnerConfig
 	for i := range configs {
@@ -935,38 +1277,56 @@ func (c *Controller) renderRunnersTab(ui *extsdk.UI) extsdk.Node {
 			break
 		}
 	}
-	rightPane := c.renderRunnerDetailPane(ui, selCfg, allSlots)
+	rightPane := c.renderRunnerDetailPane(ui, loc, selCfg, allSlots)
 
 	return ui.Split("auto", leftPane, rightPane, extsdk.Key("runners_split"), extsdk.Ratio(0.42), extsdk.Grow(1))
 }
 
-func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConfig, allSlots map[string][]state.RunnerLiveSlot) extsdk.Node {
+func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, loc string, cfg *state.RunnerConfig, allSlots map[string][]state.RunnerLiveSlot) extsdk.Node {
 	if cfg == nil {
 		return ui.Card(
 			extsdk.Key("runner_detail_empty"),
 			extsdk.Grow(1),
-			ui.Column(
-				ui.Text("Select a runner pool to inspect standby ephemeral sandboxes and live job logs.", extsdk.Tone("muted")),
+			extsdk.Gap(10),
+			ui.Row(
+				ui.Icon("server", extsdk.Tone("accent")),
+				ui.Text(tr(loc, "runners.detail_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				ui.Pill(tr(loc, "local.idle"), extsdk.Tone("muted"), extsdk.Variant("soft")),
+			).Gap(8),
+			ui.Divider(),
+			ui.Card(
+				extsdk.Key("runner_detail_empty_card"),
+				extsdk.Variant("soft"),
+				extsdk.Gap(6),
+				ui.Row(
+					ui.Icon("shield-check", extsdk.Tone("accent")),
+					ui.Text(tr(loc, "runners.detail_empty_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				).Gap(8),
+				ui.Text(tr(loc, "runners.detail_empty_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
 			),
 		)
 	}
 
 	slots := allSlots[cfg.ID]
+	dockerFlag := tr(loc, "runners.bool_off")
+	if cfg.AllowDocker {
+		dockerFlag = tr(loc, "runners.bool_on")
+	}
 	items := []any{
 		ui.Row(
 			ui.Icon("server", extsdk.Tone("accent")),
 			ui.Text(mask.SanitizeInline(cfg.Name), extsdk.Weight("semibold"), extsdk.Grow(1)),
-			ui.Pill(cfg.Scope+": "+cfg.Target, extsdk.Tone("muted"), extsdk.Variant("outline")),
+			ui.Pill(scopeLabel(loc, cfg.Scope)+": "+cfg.Target, extsdk.Tone("muted"), extsdk.Variant("outline")),
 		).Gap(8),
-		ui.Text(mask.SanitizeInline(fmt.Sprintf("Image: %s · Auth: %s · Docker-in-Job: %v",
-			cfg.Image, strings.ToUpper(cfg.AuthMode), cfg.AllowDocker)),
+		ui.Text(mask.SanitizeInline(tr(loc, "runners.detail_meta",
+			cfg.Image, strings.ToUpper(cfg.AuthMode), dockerFlag)),
 			extsdk.Tone("muted"), extsdk.Size("small")),
 		ui.Divider(),
-		ui.Text("Standby & Active Ephemeral Sandboxes", extsdk.Weight("medium"), extsdk.Size("small")),
+		ui.Text(tr(loc, "runners.slots_heading"), extsdk.Weight("medium"), extsdk.Size("small")),
 	}
 
 	if len(slots) == 0 {
-		items = append(items, ui.Text("Runner pool is stopped. Click Start to launch standby ephemeral sandboxes.", extsdk.Tone("muted")))
+		items = append(items, ui.Text(tr(loc, "runners.pool_stopped"), extsdk.Tone("muted"), extsdk.Size("small")))
 	} else {
 		for _, sl := range slots {
 			slotTone := "muted"
@@ -985,9 +1345,9 @@ func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConf
 				slotTone = "warning"
 				slotIcon = "clock"
 			}
-			desc := fmt.Sprintf("Slot #%d · %s", sl.SlotIndex, sl.Status)
+			desc := tr(loc, "runners.slot_desc", sl.SlotIndex, statusLabel(loc, sl.Status))
 			if sl.JobName != "" {
-				desc += " · Job: " + sl.JobName
+				desc += tr(loc, "runners.slot_job", sl.JobName)
 			}
 			if sl.Name != "" {
 				desc += " (" + sl.Name + ")"
@@ -995,13 +1355,14 @@ func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConf
 			rowItems := []any{
 				ui.Icon(slotIcon, extsdk.Tone(slotTone)),
 				ui.Text(mask.TruncateRunes(mask.SanitizeInline(desc), 100), extsdk.Grow(1)),
-				ui.Pill(sl.Status, extsdk.Tone(slotTone), extsdk.Variant("soft")),
+				ui.Pill(statusLabel(loc, sl.Status), extsdk.Tone(slotTone), extsdk.Variant("soft")),
 			}
 			if sl.SandboxID != "" {
 				rowItems = append(rowItems,
-					ui.Button("Open Shell",
+					ui.Button(tr(loc, "local.open_shell"),
 						extsdk.Key(fmt.Sprintf("slot_shell_%s_%d", cfg.ID, sl.SlotIndex)),
 						extsdk.Icon("terminal"),
+						extsdk.Size("small"),
 						extsdk.Variant("outline"),
 						extsdk.OnTap("open_shell", "sandbox", sl.SandboxID),
 					),
@@ -1013,7 +1374,8 @@ func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConf
 					ui.Text(mask.TruncateRunes(mask.SanitizeInline(sl.LastError), 220), extsdk.Tone("danger"), extsdk.Size("small")),
 				)
 			}
-			items = append(items, ui.Card(extsdk.Key(fmt.Sprintf("slot_%s_%d", cfg.ID, sl.SlotIndex)), extsdk.Variant("soft"), ui.Column(slotNodes...).Gap(4)))
+			slotCardArgs := append([]any{extsdk.Key(fmt.Sprintf("slot_%s_%d", cfg.ID, sl.SlotIndex)), extsdk.Variant("soft"), extsdk.Gap(4)}, slotNodes...)
+			items = append(items, ui.Card(slotCardArgs...))
 		}
 	}
 
@@ -1029,11 +1391,12 @@ func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConf
 		items = append(items,
 			ui.Divider(),
 			ui.Row(
-				ui.Text("Latest Job Logs: "+mask.TruncateRunes(mask.SanitizeInline(latestRun.JobID), 50), extsdk.Weight("medium"), extsdk.Grow(1)),
-				ui.Pill(latestRun.Status, extsdk.Tone(statusTone(latestRun.Status)), extsdk.Variant("soft")),
-				ui.Button("Reproduce Locally",
+				ui.Text(tr(loc, "runners.latest_logs", mask.TruncateRunes(mask.SanitizeInline(latestRun.JobID), 50)), extsdk.Weight("medium"), extsdk.Grow(1)),
+				ui.Pill(statusLabel(loc, latestRun.Status), extsdk.Tone(statusTone(latestRun.Status)), extsdk.Variant("soft")),
+				ui.Button(tr(loc, "runners.reproduce"),
 					extsdk.Key("runner_repro_"+latestRun.ID),
 					extsdk.Icon("rotate-ccw"),
+					extsdk.Size("small"),
 					extsdk.Variant("outline"),
 					extsdk.OnTap("reproduce_locally", latestRun.ID),
 				),
@@ -1042,17 +1405,18 @@ func (c *Controller) renderRunnerDetailPane(ui *extsdk.UI, cfg *state.RunnerConf
 				extsdk.Key("runner_log_scroll"),
 				extsdk.Variant("follow"),
 				extsdk.Grow(1),
-				ui.Code("log", formatLogsForCode(latestRun.Logs, c.redactor)),
+				ui.Code("log", formatLogsForCode(loc, latestRun.Logs, c.redactor)),
 			),
 		)
 	}
 
-	return ui.Card(extsdk.Key("runner_detail_pane"), extsdk.Grow(1), ui.Column(items...).Gap(6))
+	args := append([]any{extsdk.Key("runner_detail_pane"), extsdk.Grow(1), extsdk.Gap(8)}, items...)
+	return ui.Card(args...)
 }
 
 // --- Tab 3: Unified History ---
 
-func (c *Controller) renderHistoryTab(ui *extsdk.UI) extsdk.Node {
+func (c *Controller) renderHistoryTab(ui *extsdk.UI, loc string) extsdk.Node {
 	c.mu.Lock()
 	filter := c.historyFilter
 	selID := c.selectedHistoryRun
@@ -1085,59 +1449,101 @@ func (c *Controller) renderHistoryTab(ui *extsdk.UI) extsdk.Node {
 		selected = filtered[0]
 	}
 
-	listItems := []any{
-		ui.Tabs(filter, []string{HistoryFilterAll, HistoryFilterLocal, HistoryFilterRunner},
-			extsdk.Key("history_filter_tabs"),
-			extsdk.OnChange("set_history_filter"),
-		),
-	}
+	headerRow := ui.Row(
+		ui.Icon("clock", extsdk.Tone("accent")),
+		ui.Text(tr(loc, "history.title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+	).Gap(8)
 
+	filterTabs := ui.Tabs(
+		historyFilterLabel(loc, filter),
+		[]string{
+			tr(loc, "history.filter_all"),
+			tr(loc, "history.filter_local"),
+			tr(loc, "history.filter_runner"),
+		},
+		extsdk.Key("history_filter_tabs"),
+		extsdk.Size("small"),
+		extsdk.OnChange("set_history_filter"),
+	)
+
+	var leftBody extsdk.Node
 	if len(filtered) == 0 {
-		listItems = append(listItems, ui.Text("No runs recorded yet. Execute a local workflow or start a self-hosted runner.", extsdk.Tone("muted")))
+		leftBody = ui.Card(
+			extsdk.Key("history_empty_card"),
+			extsdk.Variant("soft"),
+			extsdk.Gap(6),
+			ui.Text(tr(loc, "history.empty_title"), extsdk.Weight("semibold")),
+			ui.Text(tr(loc, "history.empty_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
+		)
 	} else {
+		runRows := make([]any, 0, len(filtered))
 		for _, r := range filtered {
 			kindIcon := "workflow"
-			kindLabel := "Local"
+			kindLabel := tr(loc, "history.kind_local")
 			if r.Kind == "runner" {
 				kindIcon = "server"
-				kindLabel = "Runner"
+				kindLabel = tr(loc, "history.kind_runner")
 			}
 			variant := "ghost"
 			if selected != nil && selected.ID == r.ID {
 				variant = "secondary"
 			}
-			listItems = append(listItems,
+			runRows = append(runRows,
 				ui.Button(mask.TruncateRunes(mask.SanitizeInline(runTitle(r)), 48),
 					extsdk.Key("hist_item_"+r.ID),
 					extsdk.Icon(kindIcon),
+					extsdk.Size("small"),
 					extsdk.Variant(variant),
 					extsdk.Badges(
 						extsdk.Badge{Text: kindLabel, Tone: "muted", Variant: "outline"},
-						extsdk.Badge{Text: r.Status, Tone: statusTone(r.Status), Variant: "soft"},
+						extsdk.Badge{Text: statusLabel(loc, r.Status), Tone: statusTone(r.Status), Variant: "soft"},
 					),
 					extsdk.OnTap("select_history_run", r.ID),
 				),
 			)
 		}
+		leftBody = ui.Scroll(
+			extsdk.Key("history_left_scroll"),
+			extsdk.Grow(1),
+			ui.Column(runRows...).Gap(6),
+		)
 	}
 
-	leftPane := ui.Scroll(
-		extsdk.Key("history_left_scroll"),
+	leftPane := ui.Card(
+		extsdk.Key("history_left_pane"),
 		extsdk.Grow(1),
-		ui.Card(ui.Column(listItems...).Gap(6)),
+		extsdk.Gap(10),
+		headerRow,
+		filterTabs,
+		ui.Divider(),
+		leftBody,
 	)
 
-	rightPane := c.renderHistoryDetailPane(ui, selected)
+	rightPane := c.renderHistoryDetailPane(ui, loc, selected)
 	return ui.Split("auto", leftPane, rightPane, extsdk.Key("history_split"), extsdk.Ratio(0.38), extsdk.Grow(1))
 }
 
-func (c *Controller) renderHistoryDetailPane(ui *extsdk.UI, run *state.RunRecord) extsdk.Node {
+func (c *Controller) renderHistoryDetailPane(ui *extsdk.UI, loc string, run *state.RunRecord) extsdk.Node {
 	if run == nil {
 		return ui.Card(
 			extsdk.Key("history_detail_empty"),
 			extsdk.Grow(1),
-			ui.Column(
-				ui.Text("Select a run from the timeline to inspect masked logs or reproduce it locally with act.", extsdk.Tone("muted")),
+			extsdk.Gap(10),
+			ui.Row(
+				ui.Icon("file-text", extsdk.Tone("accent")),
+				ui.Text(tr(loc, "history.detail_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				ui.Pill(tr(loc, "local.idle"), extsdk.Tone("muted"), extsdk.Variant("soft")),
+			).Gap(8),
+			ui.Divider(),
+			ui.Card(
+				extsdk.Key("history_detail_empty_card"),
+				extsdk.Variant("soft"),
+				extsdk.Gap(6),
+				ui.Row(
+					ui.Icon("clock", extsdk.Tone("accent")),
+					ui.Text(tr(loc, "history.detail_empty_title"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+				).Gap(8),
+				ui.Text(tr(loc, "history.detail_empty_desc"), extsdk.Tone("muted"), extsdk.Size("small")),
 			),
 		)
 	}
@@ -1145,60 +1551,71 @@ func (c *Controller) renderHistoryDetailPane(ui *extsdk.UI, run *state.RunRecord
 	header := []any{
 		ui.Icon(statusIcon(run.Status), extsdk.Tone(statusTone(run.Status))),
 		ui.Text(mask.TruncateRunes(mask.SanitizeInline(runTitle(run)), 64), extsdk.Weight("semibold"), extsdk.Grow(1)),
-		ui.Pill(run.Status, extsdk.Tone(statusTone(run.Status)), extsdk.Variant("soft")),
-	}
-	header = append(header,
-		ui.Button("Reproduce Locally with act",
+		ui.Pill(statusLabel(loc, run.Status), extsdk.Tone(statusTone(run.Status)), extsdk.Variant("soft")),
+		ui.Button(tr(loc, "history.reproduce_act"),
 			extsdk.Key("btn_repro_local"),
 			extsdk.Icon("rotate-ccw"),
+			extsdk.Size("small"),
 			extsdk.Variant("primary"),
 			extsdk.OnTap("reproduce_locally", run.ID),
 		),
-	)
+	}
 	if run.ContainerID != "" && run.Status == "running" {
 		header = append(header,
-			ui.Button("Open Shell",
+			ui.Button(tr(loc, "local.open_shell"),
 				extsdk.Key("btn_hist_shell"),
 				extsdk.Icon("terminal"),
+				extsdk.Size("small"),
 				extsdk.Variant("outline"),
 				extsdk.OnTap("open_shell", "container", run.ContainerID),
 			),
 		)
 	} else if run.SandboxID != "" && run.Status == "running" {
 		header = append(header,
-			ui.Button("Open Shell",
+			ui.Button(tr(loc, "local.open_shell"),
 				extsdk.Key("btn_hist_shell"),
 				extsdk.Icon("terminal"),
+				extsdk.Size("small"),
 				extsdk.Variant("outline"),
 				extsdk.OnTap("open_shell", "sandbox", run.SandboxID),
 			),
 		)
 	}
 	header = append(header,
-		ui.Button("Copy Logs",
+		ui.Button(tr(loc, "local.copy_logs"),
 			extsdk.Key("btn_hist_copy"),
 			extsdk.Icon("copy"),
+			extsdk.Size("small"),
 			extsdk.Variant("ghost"),
 			extsdk.OnTap("copy_logs", run.ID),
 		),
 	)
 
-	meta := fmt.Sprintf("Kind: %s · Started: %s · Duration: %s",
-		run.Kind, run.StartedAt.Local().Format("15:04:05"), formatDuration(run.StartedAt, run.FinishedAt))
+	kindLabel := tr(loc, "history.kind_local")
+	if run.Kind == "runner" {
+		kindLabel = tr(loc, "history.kind_runner")
+	}
+	meta := tr(loc, "history.meta", kindLabel, run.StartedAt.Local().Format("15:04:05"), formatDuration(run.StartedAt, run.FinishedAt))
 	if run.Target != "" {
-		meta += " · Target: " + run.Target
+		meta += tr(loc, "history.meta_target", run.Target)
 	} else if run.WorkspacePath != "" {
-		meta += " · Repo: " + filepath.Base(run.WorkspacePath)
+		meta += tr(loc, "history.meta_repo", filepath.Base(run.WorkspacePath))
 	}
 
 	items := []any{
 		ui.Row(header...).Gap(6),
 		ui.Text(mask.TruncateRunes(mask.SanitizeInline(meta), 160), extsdk.Tone("muted"), extsdk.Size("small")),
+		ui.Divider(),
 	}
 	if run.Error != "" {
-		items = append(items, ui.Text("Error: "+mask.TruncateRunes(mask.SanitizeInline(run.Error), 240), extsdk.Tone("danger"), extsdk.Size("small")))
+		items = append(items,
+			ui.Card(
+				extsdk.Variant("danger"),
+				ui.Text(tr(loc, "local.error_prefix", mask.TruncateRunes(mask.SanitizeInline(run.Error), 240)), extsdk.Tone("danger"), extsdk.Size("small")),
+			),
+		)
 	}
-	if dagRows := buildDagRows(run.Steps); len(dagRows) > 0 {
+	if dagRows := buildDagRows(loc, run.Steps); len(dagRows) > 0 {
 		items = append(items, ui.Dag(dagRows, extsdk.Key("history_dag"), extsdk.MaxHeight(180)))
 	}
 	items = append(items,
@@ -1206,16 +1623,17 @@ func (c *Controller) renderHistoryDetailPane(ui *extsdk.UI, run *state.RunRecord
 			extsdk.Key("history_log_scroll"),
 			extsdk.Variant("follow"),
 			extsdk.Grow(1),
-			ui.Code("log", formatLogsForCode(run.Logs, c.redactor)),
+			ui.Code("log", formatLogsForCode(loc, run.Logs, c.redactor)),
 		),
 	)
 
-	return ui.Card(extsdk.Key("history_detail_pane"), extsdk.Grow(1), ui.Column(items...).Gap(6))
+	args := append([]any{extsdk.Key("history_detail_pane"), extsdk.Grow(1), extsdk.Gap(8)}, items...)
+	return ui.Card(args...)
 }
 
 // --- Modal Dialogs ---
 
-func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
+func (c *Controller) renderDialog(ui *extsdk.UI, loc, dlg string) extsdk.Node {
 	c.mu.Lock()
 	errMsg := c.dialogError
 	scope := c.newRunnerScope
@@ -1227,24 +1645,24 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 	case dialogSecrets:
 		keys := c.store.SecretKeys()
 		rows := []any{
-			ui.Text("Secrets are stored encrypted in GVX Desktop's OS Keychain Vault and automatically masked (***) in all logs.", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.secrets.desc"), extsdk.Tone("muted"), extsdk.Size("small")),
 		}
 		if errMsg != "" {
 			rows = append(rows, ui.Text(mask.SanitizeInline(errMsg), extsdk.Tone("danger"), extsdk.Size("small")))
 		}
 		rows = append(rows,
-			ui.Text("Add or update secret", extsdk.Weight("medium"), extsdk.Size("small")),
-			ui.Input("", extsdk.Key("secret_name"), extsdk.Placeholder("Secret name (e.g. GITHUB_TOKEN, NPM_TOKEN)")),
-			ui.Input("", extsdk.Key("secret_value"), extsdk.Variant("password"), extsdk.Placeholder("Secret value")),
+			ui.Text(tr(loc, "dlg.secrets.add_heading"), extsdk.Weight("medium"), extsdk.Size("small")),
+			ui.Input("", extsdk.Key("secret_name"), extsdk.Placeholder(tr(loc, "dlg.secrets.name_ph"))),
+			ui.Input("", extsdk.Key("secret_value"), extsdk.Variant("password"), extsdk.Placeholder(tr(loc, "dlg.secrets.val_ph"))),
 			ui.Row(
-				ui.Button("Save Secret", extsdk.Key("btn_save_secret"), extsdk.Icon("lock"), extsdk.Variant("primary"), extsdk.OnTap("save_secret")),
-				ui.Button("Close", extsdk.Key("btn_close_secrets"), extsdk.Variant("ghost"), extsdk.OnTap("close_dialog")),
+				ui.Button(tr(loc, "dlg.secrets.save"), extsdk.Key("btn_save_secret"), extsdk.Icon("lock"), extsdk.Size("small"), extsdk.Variant("primary"), extsdk.OnTap("save_secret")),
+				ui.Button(tr(loc, "dlg.secrets.close"), extsdk.Key("btn_close_secrets"), extsdk.Size("small"), extsdk.Variant("ghost"), extsdk.OnTap("close_dialog")),
 			).Gap(8),
 			ui.Divider(),
-			ui.Text(fmt.Sprintf("Stored Secrets (%d)", len(keys)), extsdk.Weight("medium"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.secrets.stored_heading", len(keys)), extsdk.Weight("medium"), extsdk.Size("small")),
 		)
 		if len(keys) == 0 {
-			rows = append(rows, ui.Text("No project secrets stored yet.", extsdk.Tone("muted"), extsdk.Size("small")))
+			rows = append(rows, ui.Text(tr(loc, "dlg.secrets.empty"), extsdk.Tone("muted"), extsdk.Size("small")))
 		} else {
 			for i, k := range keys {
 				rows = append(rows,
@@ -1252,10 +1670,11 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 						extsdk.Key(fmt.Sprintf("sec_row_%d", i)),
 						ui.Icon("key", extsdk.Tone("muted")),
 						ui.Text(mask.SanitizeInline(k), extsdk.Grow(1)),
-						ui.Pill("set", extsdk.Tone("success"), extsdk.Variant("soft")),
+						ui.Pill(tr(loc, "dlg.secrets.pill_set"), extsdk.Tone("success"), extsdk.Variant("soft")),
 						ui.Button("",
 							extsdk.Key(fmt.Sprintf("sec_del_%d", i)),
 							extsdk.Icon("trash"),
+							extsdk.Size("small"),
 							extsdk.Variant("ghost"),
 							extsdk.Tone("danger"),
 							extsdk.OnTap("delete_secret", k),
@@ -1264,7 +1683,7 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 				)
 			}
 		}
-		return ui.Dialog("Secrets Vault",
+		return ui.Dialog(tr(loc, "dlg.secrets.title"),
 			extsdk.Key("dlg_secrets"),
 			extsdk.OnChange("close_dialog"),
 			ui.Column(rows...).Gap(6),
@@ -1275,15 +1694,15 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 		defaultConc := strconv.Itoa(max(c.store.Settings().DefaultConcurrency, 1))
 		hasDefaultPAT := c.store.Settings().HasDefaultPAT
 
-		tokenPlaceholder := "GitHub Fine-grained PAT (Admin: Read & Write)"
+		tokenPlaceholder := tr(loc, "dlg.runner.ph_pat")
 		if authMode == "jit" {
-			tokenPlaceholder = "One-time Encoded JIT Config (base64)"
+			tokenPlaceholder = tr(loc, "dlg.runner.ph_jit")
 		} else if hasDefaultPAT {
-			tokenPlaceholder = "Optional — leave blank to use default PAT from Extension Settings"
+			tokenPlaceholder = tr(loc, "dlg.runner.ph_default_pat")
 		}
 
 		rows := []any{
-			ui.Text("Runs official actions/runner inside Standby Ephemeral GVX Sandboxes via outbound long-polling.", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.runner.desc"), extsdk.Tone("muted"), extsdk.Size("small")),
 		}
 		if errMsg != "" {
 			rows = append(rows, ui.Text(mask.SanitizeInline(errMsg), extsdk.Tone("danger"), extsdk.Size("small")))
@@ -1291,43 +1710,53 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 		rows = append(rows,
 			ui.Row(
 				ui.Column(
-					ui.Text("Scope", extsdk.Tone("muted"), extsdk.Size("small")),
-					ui.Select([]string{"repo", "org"}, scope, extsdk.Key("new_runner_scope"), extsdk.OnChange("set_new_runner_scope")),
+					ui.Text(tr(loc, "dlg.runner.scope"), extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Select(
+						[]string{tr(loc, "dlg.runner.scope_repo"), tr(loc, "dlg.runner.scope_org")},
+						scopeLabel(loc, scope),
+						extsdk.Key("new_runner_scope"),
+						extsdk.OnChange("set_new_runner_scope"),
+					),
 				).Gap(4).Grow(1),
 				ui.Column(
-					ui.Text("Auth Mode", extsdk.Tone("muted"), extsdk.Size("small")),
-					ui.Select([]string{"pat", "jit"}, authMode, extsdk.Key("new_runner_auth"), extsdk.OnChange("set_new_runner_auth")),
+					ui.Text(tr(loc, "dlg.runner.auth_mode"), extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Select(
+						[]string{tr(loc, "dlg.runner.auth_pat"), tr(loc, "dlg.runner.auth_jit")},
+						authModeLabel(loc, authMode),
+						extsdk.Key("new_runner_auth"),
+						extsdk.OnChange("set_new_runner_auth"),
+					),
 				).Gap(4).Grow(1),
 			).Gap(8),
-			ui.Text("Target Repository (owner/repo) or Organization", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.runner.target"), extsdk.Tone("muted"), extsdk.Size("small")),
 			ui.Input("", extsdk.Key("new_runner_target"), extsdk.Placeholder("owner/repo")),
-			ui.Text("Runner Name Prefix (optional)", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.runner.name_prefix"), extsdk.Tone("muted"), extsdk.Size("small")),
 			ui.Input("", extsdk.Key("new_runner_name"), extsdk.Placeholder("gvx-runner")),
-			ui.Text("Credential (stored strictly in Host Keychain Vault)", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.runner.credential"), extsdk.Tone("muted"), extsdk.Size("small")),
 			ui.Input("", extsdk.Key("new_runner_token"), extsdk.Variant("password"), extsdk.Placeholder(tokenPlaceholder)),
-			ui.Text("Labels (comma-separated)", extsdk.Tone("muted"), extsdk.Size("small")),
+			ui.Text(tr(loc, "dlg.runner.labels"), extsdk.Tone("muted"), extsdk.Size("small")),
 			ui.Input(defaultLabels, extsdk.Key("new_runner_labels"), extsdk.Placeholder(defaultLabels)),
 			ui.Row(
 				ui.Column(
-					ui.Text("Runner OCI Image", extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Text(tr(loc, "dlg.runner.image"), extsdk.Tone("muted"), extsdk.Size("small")),
 					ui.Input(state.DefaultRunnerImage, extsdk.Key("new_runner_image"), extsdk.Placeholder(state.DefaultRunnerImage)),
 				).Gap(4).Grow(3),
 				ui.Column(
-					ui.Text("Concurrency", extsdk.Tone("muted"), extsdk.Size("small")),
+					ui.Text(tr(loc, "dlg.runner.concurrency"), extsdk.Tone("muted"), extsdk.Size("small")),
 					ui.Input(defaultConc, extsdk.Key("new_runner_concurrency"), extsdk.Placeholder("1")),
 				).Gap(4).Grow(1),
 			).Gap(8),
-			ui.Toggle(allowDocker, "Allow Docker-in-Job (mounts scoped /var/run/docker.sock)",
+			ui.Toggle(allowDocker, tr(loc, "dlg.runner.allow_docker"),
 				extsdk.Key("new_runner_docker"),
 				extsdk.OnChange("toggle_new_runner_docker"),
 			),
 			ui.Row(
-				ui.Button("Create & Start Runner", extsdk.Key("btn_create_runner"), extsdk.Icon("plus"), extsdk.Variant("primary"), extsdk.OnTap("create_runner")),
-				ui.Button("Cancel", extsdk.Key("btn_cancel_runner"), extsdk.Variant("ghost"), extsdk.OnTap("close_dialog")),
+				ui.Button(tr(loc, "dlg.runner.create"), extsdk.Key("btn_create_runner"), extsdk.Icon("plus"), extsdk.Size("small"), extsdk.Variant("primary"), extsdk.OnTap("create_runner")),
+				ui.Button(tr(loc, "local.cancel"), extsdk.Key("btn_cancel_runner"), extsdk.Size("small"), extsdk.Variant("ghost"), extsdk.OnTap("close_dialog")),
 			).Gap(8),
 		)
 
-		return ui.Dialog("Add Self-Hosted Runner (Engine A)",
+		return ui.Dialog(tr(loc, "dlg.runner.title"),
 			extsdk.Key("dlg_add_runner"),
 			extsdk.OnChange("close_dialog"),
 			ui.Column(rows...).Gap(6),
@@ -1342,10 +1771,9 @@ func (c *Controller) renderDialog(ui *extsdk.UI, dlg string) extsdk.Node {
 func (c *Controller) Handlers() extsdk.Handlers {
 	return extsdk.Handlers{
 		"set_tab": func(ctx *extsdk.EventContext, val string) error {
-			switch val {
-			case TabLocal, TabRunners, TabHistory:
+			if tab, ok := parseTabValue(val); ok {
 				c.mu.Lock()
-				c.activeTab = val
+				c.activeTab = tab
 				c.mu.Unlock()
 				c.notify(ctx)
 			}
@@ -1361,9 +1789,10 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		// --- Tab 1 handlers ---
 		"pick_repo": func(ctx *extsdk.EventContext) error {
+			loc := c.resolveLocale(ctx.Locale)
 			dir, ok, err := ctx.Host.PickFolder(ctx)
 			if err != nil {
-				_ = ctx.Host.Toast(ctx, "error", "Pick folder failed: "+err.Error())
+				_ = ctx.Host.Toast(ctx, "error", tr(loc, "toast.pick_folder_failed", err.Error()))
 				return err
 			}
 			if !ok || strings.TrimSpace(dir) == "" {
@@ -1371,14 +1800,14 @@ func (c *Controller) Handlers() extsdk.Handlers {
 			}
 			ws, err := c.store.AddWorkspace(ctx, dir)
 			if err != nil {
-				_ = ctx.Host.Toast(ctx, "error", "Failed to save repository: "+err.Error())
+				_ = ctx.Host.Toast(ctx, "error", tr(loc, "toast.save_repo_failed", err.Error()))
 				return err
 			}
 			c.mu.Lock()
 			c.selectedWorkspace = ws.Path
 			c.refreshWorkflowsLocked(ws.Path)
 			c.mu.Unlock()
-			_ = ctx.Host.Toast(ctx, "success", "Added repository "+ws.Name)
+			_ = ctx.Host.Toast(ctx, "success", tr(loc, "toast.repo_added", ws.Name))
 			c.notify(ctx)
 			return nil
 		},
@@ -1423,7 +1852,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		"select_job": func(ctx *extsdk.EventContext, job string) error {
 			c.mu.Lock()
-			c.selectedJob = job
+			c.selectedJob = parseJobValue(job)
 			c.mu.Unlock()
 			c.notify(ctx)
 			return nil
@@ -1491,15 +1920,16 @@ func (c *Controller) Handlers() extsdk.Handlers {
 		},
 
 		"save_secret": func(ctx *extsdk.EventContext) error {
+			loc := c.resolveLocale(ctx.Locale)
 			name := strings.TrimSpace(ctx.Field("secret_name"))
 			val := ctx.Field("secret_value")
 			if name == "" || val == "" {
-				c.setDialogError("Both secret name and value are required.")
+				c.setDialogError(tr(loc, "dlg.secrets.err_required"))
 				c.notify(ctx)
 				return nil
 			}
 			if err := ctx.Host.SecretSet(ctx, name, val); err != nil {
-				c.setDialogError("Failed to save secret: " + err.Error())
+				c.setDialogError(tr(loc, "dlg.secrets.err_save", err.Error()))
 				c.notify(ctx)
 				return nil
 			}
@@ -1508,14 +1938,15 @@ func (c *Controller) Handlers() extsdk.Handlers {
 				c.store.SetSecretKeys(keys)
 			}
 			c.setDialogError("")
-			_ = ctx.Host.Toast(ctx, "success", "Saved secret "+name+" to Host Vault")
+			_ = ctx.Host.Toast(ctx, "success", tr(loc, "dlg.secrets.toast_saved", name))
 			c.notify(ctx)
 			return nil
 		},
 
 		"delete_secret": func(ctx *extsdk.EventContext, name string) error {
+			loc := c.resolveLocale(ctx.Locale)
 			if err := ctx.Host.SecretDelete(ctx, name); err != nil {
-				c.setDialogError("Failed to delete secret: " + err.Error())
+				c.setDialogError(tr(loc, "dlg.secrets.err_delete", err.Error()))
 				c.notify(ctx)
 				return nil
 			}
@@ -1542,11 +1973,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		"set_new_runner_scope": func(ctx *extsdk.EventContext, val string) error {
 			c.mu.Lock()
-			if val == "org" {
-				c.newRunnerScope = "org"
-			} else {
-				c.newRunnerScope = "repo"
-			}
+			c.newRunnerScope = parseScopeValue(val)
 			c.mu.Unlock()
 			c.notify(ctx)
 			return nil
@@ -1554,11 +1981,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		"set_new_runner_auth": func(ctx *extsdk.EventContext, val string) error {
 			c.mu.Lock()
-			if val == "jit" {
-				c.newRunnerAuthMode = "jit"
-			} else {
-				c.newRunnerAuthMode = "pat"
-			}
+			c.newRunnerAuthMode = parseAuthModeValue(val)
 			c.mu.Unlock()
 			c.notify(ctx)
 			return nil
@@ -1573,6 +1996,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 		},
 
 		"create_runner": func(ctx *extsdk.EventContext) error {
+			loc := c.resolveLocale(ctx.Locale)
 			c.mu.Lock()
 			scope := c.newRunnerScope
 			authMode := c.newRunnerAuthMode
@@ -1587,22 +2011,22 @@ func (c *Controller) Handlers() extsdk.Handlers {
 			concRaw := strings.TrimSpace(ctx.Field("new_runner_concurrency"))
 
 			if target == "" {
-				c.setDialogError("Target repository (owner/repo) or organization is required.")
+				c.setDialogError(tr(loc, "dlg.runner.err_target"))
 				c.notify(ctx)
 				return nil
 			}
 			if scope == "repo" && !strings.Contains(target, "/") {
-				c.setDialogError("Repository target must be formatted as owner/repo.")
+				c.setDialogError(tr(loc, "dlg.runner.err_repo_format"))
 				c.notify(ctx)
 				return nil
 			}
 			if authMode == "jit" && tokenVal == "" {
-				c.setDialogError("Manual JIT mode requires an encoded JIT config token.")
+				c.setDialogError(tr(loc, "dlg.runner.err_jit_token"))
 				c.notify(ctx)
 				return nil
 			}
 			if authMode == "pat" && tokenVal == "" && !c.store.Settings().HasDefaultPAT {
-				c.setDialogError("Provide a GitHub PAT here or configure Default GitHub Token in Extension Settings.")
+				c.setDialogError(tr(loc, "dlg.runner.err_pat_token"))
 				c.notify(ctx)
 				return nil
 			}
@@ -1626,7 +2050,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 			if tokenVal != "" {
 				secretKey = "runner_" + strings.ReplaceAll(runnerID, "-", "_") + "_cred"
 				if err := ctx.Host.SecretSet(ctx, secretKey, tokenVal); err != nil {
-					c.setDialogError("Store credential in Host Vault: " + err.Error())
+					c.setDialogError(tr(loc, "dlg.runner.err_store_cred", err.Error()))
 					c.notify(ctx)
 					return nil
 				}
@@ -1664,7 +2088,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 			if c.runnerMgr != nil {
 				c.runnerMgr.Reconcile()
 			}
-			_ = ctx.Host.Toast(ctx, "success", "Started runner pool "+cfg.Name)
+			_ = ctx.Host.Toast(ctx, "success", tr(loc, "dlg.runner.toast_started", cfg.Name))
 			c.notify(ctx)
 			return nil
 		},
@@ -1718,10 +2142,9 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		// --- Tab 3 (History & Synergy) handlers ---
 		"set_history_filter": func(ctx *extsdk.EventContext, val string) error {
-			switch val {
-			case HistoryFilterAll, HistoryFilterLocal, HistoryFilterRunner:
+			if f, ok := parseHistoryFilterValue(val); ok {
 				c.mu.Lock()
-				c.historyFilter = val
+				c.historyFilter = f
 				c.mu.Unlock()
 				c.notify(ctx)
 			}
@@ -1749,11 +2172,12 @@ func (c *Controller) Handlers() extsdk.Handlers {
 		},
 
 		"reproduce_locally": func(ctx *extsdk.EventContext, runID string) error {
+			loc := c.resolveLocale(ctx.Locale)
 			run, ok := c.store.RunByID(runID)
 			if !ok {
 				return fmt.Errorf("run %q not found", runID)
 			}
-			msg := c.loadRunIntoLocalTab(run)
+			msg := c.loadRunIntoLocalTab(loc, run)
 			_ = ctx.Host.Toast(ctx, "info", msg)
 			c.notify(ctx)
 			return nil
@@ -1761,6 +2185,7 @@ func (c *Controller) Handlers() extsdk.Handlers {
 
 		// --- Shared UI intents ---
 		"open_shell": func(ctx *extsdk.EventContext) error {
+			loc := c.resolveLocale(ctx.Locale)
 			targetType := ctx.ArgString(0)
 			targetID := ctx.ArgString(1)
 			if targetType == "" || targetID == "" {
@@ -1770,23 +2195,24 @@ func (c *Controller) Handlers() extsdk.Handlers {
 				TargetType: targetType,
 				TargetID:   targetID,
 			}); err != nil {
-				_ = ctx.Host.Toast(ctx, "error", "Open Shell failed: "+err.Error())
+				_ = ctx.Host.Toast(ctx, "error", tr(loc, "toast.open_shell_failed", err.Error()))
 				return err
 			}
 			return nil
 		},
 
 		"copy_logs": func(ctx *extsdk.EventContext, runID string) error {
+			loc := c.resolveLocale(ctx.Locale)
 			run, ok := c.store.RunByID(runID)
 			if !ok {
 				return nil
 			}
-			text := formatLogsForCode(run.Logs, c.redactor)
+			text := formatLogsForCode(loc, run.Logs, c.redactor)
 			if err := ctx.Host.Copy(ctx, text); err != nil {
-				_ = ctx.Host.Toast(ctx, "error", "Copy failed: "+err.Error())
+				_ = ctx.Host.Toast(ctx, "error", tr(loc, "toast.copy_failed", err.Error()))
 				return err
 			}
-			_ = ctx.Host.Toast(ctx, "success", "Copied masked logs to clipboard")
+			_ = ctx.Host.Toast(ctx, "success", tr(loc, "toast.logs_copied"))
 			return nil
 		},
 
@@ -1878,7 +2304,7 @@ func (c *Controller) loadProjectSecrets(ctx context.Context, host *extsdk.Host) 
 	return out
 }
 
-func (c *Controller) loadRunIntoLocalTab(run *state.RunRecord) string {
+func (c *Controller) loadRunIntoLocalTab(loc string, run *state.RunRecord) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -1920,17 +2346,17 @@ func (c *Controller) loadRunIntoLocalTab(run *state.RunRecord) string {
 					if strings.EqualFold(j.ID, run.JobID) || strings.EqualFold(j.Name, run.JobID) {
 						c.selectedWorkflow = w.File
 						c.selectedJob = j.ID
-						return fmt.Sprintf("Loaded %s / %s into Local Workflows (act)", w.File, j.ID)
+						return tr(loc, "toast.repro_loaded_job", w.File, j.ID)
 					}
 				}
 			}
 		}
 		c.selectedJob = AllJobsOption
 		if matchedWS == "" {
-			return fmt.Sprintf("Switched to Local Workflows — add local checkout of %s via Add Repo to reproduce job %q", run.Target, run.JobID)
+			return tr(loc, "toast.repro_add_repo", run.Target, run.JobID)
 		}
 	}
-	return "Loaded run into Local Workflows (act)"
+	return tr(loc, "toast.repro_loaded")
 }
 
 func (c *Controller) refreshHostState(ctx context.Context) {
@@ -1949,6 +2375,7 @@ func (c *Controller) refreshHostState(ctx context.Context) {
 }
 
 func (c *Controller) handleCommandRunLocal(ctx *extsdk.CommandContext) error {
+	loc := c.resolveLocale(ctx.Locale)
 	c.mu.Lock()
 	c.activeTab = TabLocal
 	hasSelection := c.selectedWorkspace != "" && c.selectedWorkflow != ""
@@ -1961,7 +2388,7 @@ func (c *Controller) handleCommandRunLocal(ctx *extsdk.CommandContext) error {
 	c.mu.Unlock()
 
 	if !hasSelection {
-		_ = ctx.Host.Toast(ctx, "info", "Open GitHub Actions and select a repository & workflow first.")
+		_ = ctx.Host.Toast(ctx, "info", tr(loc, "toast.cmd_select_first"))
 		ctx.NotifyChanged()
 		return nil
 	}
@@ -2091,7 +2518,7 @@ func (c *Controller) notify(ctx *extsdk.EventContext) {
 
 // --- Helpers ---
 
-func buildDagRows(steps []state.StepRecord) []extsdk.DagRow {
+func buildDagRows(loc string, steps []state.StepRecord) []extsdk.DagRow {
 	if len(steps) == 0 {
 		return nil
 	}
@@ -2115,7 +2542,7 @@ func buildDagRows(steps []state.StepRecord) []extsdk.DagRow {
 		}
 		meta := formatDuration(st.StartedAt, st.EndedAt)
 		if st.StartedAt.IsZero() {
-			meta = st.Status
+			meta = statusLabel(loc, st.Status)
 		}
 		rows = append(rows, extsdk.DagRow{
 			ID:      id,
@@ -2127,16 +2554,16 @@ func buildDagRows(steps []state.StepRecord) []extsdk.DagRow {
 			Icon:    statusIcon(st.Status),
 			Strong:  strings.HasPrefix(id, "job:"),
 			Badges: []extsdk.Badge{
-				{Text: mask.TruncateRunes(st.Status, 20), Tone: statusTone(st.Status), Variant: "soft"},
+				{Text: mask.TruncateRunes(statusLabel(loc, st.Status), 20), Tone: statusTone(st.Status), Variant: "soft"},
 			},
 		})
 	}
 	return rows
 }
 
-func formatLogsForCode(lines []string, red *mask.Redactor) string {
+func formatLogsForCode(loc string, lines []string, red *mask.Redactor) string {
 	if len(lines) == 0 {
-		return "(waiting for output...)"
+		return tr(loc, "local.waiting_output")
 	}
 	var b strings.Builder
 	// Keep the newest lines fitting inside maxCodeLogBytes.

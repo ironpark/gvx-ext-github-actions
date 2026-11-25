@@ -117,7 +117,7 @@ jobs:
 	}
 
 	// Verify 1-click "Reproduce Locally with act" maps runner failure to local workspace & job.
-	msg := ctrl.loadRunIntoLocalTab(runnerRun)
+	msg := ctrl.loadRunIntoLocalTab(LocaleEnglish, runnerRun)
 	if !strings.Contains(msg, "ci.yml") || !strings.Contains(msg, "test") {
 		t.Fatalf("unexpected reproduce message: %q", msg)
 	}
