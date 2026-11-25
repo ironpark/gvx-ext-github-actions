@@ -523,7 +523,7 @@ func (c *Controller) renderToolbar(ui *extsdk.UI, loc, activeTab string) extsdk.
 				extsdk.Key("tb_add_runner"),
 				extsdk.Icon("plus"),
 				extsdk.Size("small"),
-				extsdk.Variant("primary"),
+				extsdk.Variant("outline"),
 				extsdk.OnTap("open_add_runner"),
 			),
 		)
@@ -533,23 +533,13 @@ func (c *Controller) renderToolbar(ui *extsdk.UI, loc, activeTab string) extsdk.
 				extsdk.Key("tb_clear_history"),
 				extsdk.Icon("trash"),
 				extsdk.Size("small"),
-				extsdk.Variant("ghost"),
+				extsdk.Variant("outline"),
 				extsdk.Placeholder(tr(loc, "toolbar.clear_finished_tip")),
 				extsdk.OnTap("clear_history"),
 			),
 		)
 	}
 
-	items = append(items,
-		ui.Button("",
-			extsdk.Key("tb_refresh"),
-			extsdk.Icon("refresh-cw"),
-			extsdk.Size("small"),
-			extsdk.Variant("ghost"),
-			extsdk.Placeholder(tr(loc, "toolbar.refresh")),
-			extsdk.OnTap("refresh"),
-		),
-	)
 	return ui.Toolbar(items...)
 }
 
@@ -621,6 +611,14 @@ func (c *Controller) renderWorkspaceEmptyPane(ui *extsdk.UI, loc string) extsdk.
 	header := ui.Row(
 		ui.Icon("folder", extsdk.Tone("accent")),
 		ui.Text(tr(loc, "local.repositories"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+		ui.Button("",
+			extsdk.Key("btn_refresh_repos_empty"),
+			extsdk.Icon("refresh-cw"),
+			extsdk.Size("small"),
+			extsdk.Variant("ghost"),
+			extsdk.Placeholder(tr(loc, "toolbar.refresh")),
+			extsdk.OnTap("refresh"),
+		),
 		ui.Button(tr(loc, "local.add_repo"),
 			extsdk.Key("btn_pick_repo"),
 			extsdk.Icon("folder-plus"),
@@ -628,7 +626,7 @@ func (c *Controller) renderWorkspaceEmptyPane(ui *extsdk.UI, loc string) extsdk.
 			extsdk.Variant("secondary"),
 			extsdk.OnTap("pick_repo"),
 		),
-	).Gap(8)
+	).Gap(6)
 
 	emptyHero := ui.Card(
 		extsdk.Key("card_workspaces_empty"),
@@ -678,6 +676,14 @@ func (c *Controller) renderWorkspaceCard(ui *extsdk.UI, loc string, workspaces [
 	header := ui.Row(
 		ui.Icon("folder", extsdk.Tone("accent")),
 		ui.Text(tr(loc, "local.repositories"), extsdk.Weight("semibold"), extsdk.Grow(1)),
+		ui.Button("",
+			extsdk.Key("btn_refresh_repos"),
+			extsdk.Icon("refresh-cw"),
+			extsdk.Size("small"),
+			extsdk.Variant("ghost"),
+			extsdk.Placeholder(tr(loc, "toolbar.refresh")),
+			extsdk.OnTap("refresh"),
+		),
 		ui.Button(tr(loc, "local.add_repo"),
 			extsdk.Key("btn_pick_repo"),
 			extsdk.Icon("folder-plus"),
@@ -685,7 +691,7 @@ func (c *Controller) renderWorkspaceCard(ui *extsdk.UI, loc string, workspaces [
 			extsdk.Variant("secondary"),
 			extsdk.OnTap("pick_repo"),
 		),
-	).Gap(8)
+	).Gap(6)
 
 	rows := []any{header, ui.Divider()}
 	for i, ws := range workspaces {

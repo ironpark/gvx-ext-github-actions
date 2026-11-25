@@ -1,6 +1,6 @@
 schema_version = 1
 id = "github-actions"
-version = "0.1.0"
+version = "0.2.0"
 publisher = "ironpark"
 name = "GitHub Actions"
 description = "Run GitHub Actions workflows locally with act and host isolated GVX self-hosted runners."
@@ -21,7 +21,7 @@ permissions = [
 type = "sandbox"
 dockerfile = "Dockerfile"
 context = "."
-image = "ghcr.io/ironpark/gvx-ext-github-actions:0.1.0"
+image = "ghcr.io/ironpark/gvx-ext-github-actions:0.2.0"
 port = 18900
 memory = "512m"
 cpus = "1"
@@ -58,3 +58,89 @@ job = { type = "string", description = "Specific job ID", required = false }
 default_act_image = { type = "string", label = "Default act runner image", description = "Container image mapped to ubuntu-latest when running locally.", default = "catthehacker/ubuntu:act-latest" }
 default_concurrency = { type = "number", label = "Default runner concurrency", default = 1 }
 github_pat = { type = "secret", label = "Default GitHub Token (PAT)", description = "Optional token for generating ephemeral runner JIT configs." }
+
+# Localized metadata for GVX Desktop's 7 UI languages
+
+[i18n.ko]
+description = "act로 GitHub Actions 워크플로를 로컬에서 실행하고 격리된 GVX 셀프 호스팅 러너를 호스팅합니다."
+[i18n.ko.commands]
+run-local = "Actions: 로컬 워크플로 실행"
+add-runner = "Actions: 셀프 호스팅 러너 추가"
+[i18n.ko.settings.default_act_image]
+label = "기본 act 러너 이미지"
+description = "로컬 실행 시 ubuntu-latest에 매핑되는 컨테이너 이미지입니다."
+[i18n.ko.settings.default_concurrency]
+label = "기본 러너 동시성"
+[i18n.ko.settings.github_pat]
+label = "기본 GitHub 토큰 (PAT)"
+description = "일회성 러너 JIT 설정을 생성하기 위한 선택적 토큰입니다."
+
+[i18n.ja]
+description = "act で GitHub Actions ワークフローをローカル実行し、隔離された GVX セルフホストランナーをホストします。"
+[i18n.ja.commands]
+run-local = "Actions: ローカルワークフローを実行"
+add-runner = "Actions: セルフホストランナーを追加"
+[i18n.ja.settings.default_act_image]
+label = "既定の act ランナーイメージ"
+description = "ローカル実行時に ubuntu-latest へマッピングされるコンテナイメージです。"
+[i18n.ja.settings.default_concurrency]
+label = "既定のランナー並列数"
+[i18n.ja.settings.github_pat]
+label = "既定の GitHub トークン (PAT)"
+description = "エフェメラルランナーの JIT 設定を生成するための任意トークンです。"
+
+[i18n.zh-Hans]
+description = "使用 act 在本地运行 GitHub Actions 工作流，并托管隔离的 GVX 自托管运行器。"
+[i18n.zh-Hans.commands]
+run-local = "Actions: 运行本地工作流"
+add-runner = "Actions: 添加自托管运行器"
+[i18n.zh-Hans.settings.default_act_image]
+label = "默认 act 运行器镜像"
+description = "本地运行时映射到 ubuntu-latest 的容器镜像。"
+[i18n.zh-Hans.settings.default_concurrency]
+label = "默认运行器并发数"
+[i18n.zh-Hans.settings.github_pat]
+label = "默认 GitHub 令牌 (PAT)"
+description = "用于生成临时运行器 JIT 配置的可选令牌。"
+
+[i18n.zh-Hant]
+description = "使用 act 在本機執行 GitHub Actions 工作流程，並託管隔離的 GVX 自託管執行器。"
+[i18n.zh-Hant.commands]
+run-local = "Actions: 執行本機工作流程"
+add-runner = "Actions: 新增自託管執行器"
+[i18n.zh-Hant.settings.default_act_image]
+label = "預設 act 執行器映像檔"
+description = "本機執行時對應至 ubuntu-latest 的容器映像檔。"
+[i18n.zh-Hant.settings.default_concurrency]
+label = "預設執行器並行數"
+[i18n.zh-Hant.settings.github_pat]
+label = "預設 GitHub 權杖 (PAT)"
+description = "用於產生暫時性執行器 JIT 設定的選用權杖。"
+
+[i18n.de]
+description = "GitHub-Actions-Workflows lokal mit act ausführen und isolierte GVX-Self-Hosted-Runner betreiben."
+[i18n.de.commands]
+run-local = "Actions: Lokalen Workflow ausführen"
+add-runner = "Actions: Self-Hosted Runner hinzufügen"
+[i18n.de.settings.default_act_image]
+label = "Standard-act-Runner-Image"
+description = "Container-Image, das bei lokaler Ausführung auf ubuntu-latest abgebildet wird."
+[i18n.de.settings.default_concurrency]
+label = "Standard-Runner-Parallelität"
+[i18n.de.settings.github_pat]
+label = "Standard-GitHub-Token (PAT)"
+description = "Optionales Token zum Erzeugen flüchtiger Runner-JIT-Konfigurationen."
+
+[i18n.hi]
+description = "act के साथ GitHub Actions वर्कफ़्लो लोकल चलाएँ और अलग-थलग GVX सेल्फ़-होस्टेड रनर होस्ट करें।"
+[i18n.hi.commands]
+run-local = "Actions: लोकल वर्कफ़्लो चलाएँ"
+add-runner = "Actions: सेल्फ़-होस्टेड रनर जोड़ें"
+[i18n.hi.settings.default_act_image]
+label = "डिफ़ॉल्ट act रनर इमेज"
+description = "लोकल चलाते समय ubuntu-latest पर मैप की जाने वाली कंटेनर इमेज।"
+[i18n.hi.settings.default_concurrency]
+label = "डिफ़ॉल्ट रनर समानांतरता"
+[i18n.hi.settings.github_pat]
+label = "डिफ़ॉल्ट GitHub टोकन (PAT)"
+description = "अस्थायी रनर JIT कॉन्फ़िग बनाने के लिए वैकल्पिक टोकन।"

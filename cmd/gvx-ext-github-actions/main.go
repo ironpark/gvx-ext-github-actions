@@ -15,7 +15,7 @@ import (
 	"github.com/ironpark/gvx-ext-github-actions/internal/ui"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
