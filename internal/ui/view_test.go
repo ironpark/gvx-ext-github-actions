@@ -474,3 +474,111 @@ secretsReady:
 		t.Fatal("timed out waiting for app shutdown")
 	}
 }
+
+func TestWorkflowStagesPipelineGraphAndInspector(t *testing.T) {
+	ctx := context.Background()
+	repo := t.TempDir()
+	wfDir := filepath.Join(repo, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wf := `name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Detect changes
+        run: echo ok
+  lint:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run linter
+        run: golangci-lint run
+  sign-win:
+    needs: changes
+    runs-on: windows-latest
+    steps:
+      - name: Sign binary
+        run: echo sign
+  verify-mac:
+    needs: sign-win
+    runs-on: macos-15
+    steps:
+      - name: Verify signature
+        run: codesign -v app
+`
+	if err := os.WriteFile(filepath.Join(wfDir, "ci.yml"), []byte(wf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st := state.NewStore(nil)
+	st.SetHostInfo(extsdk.HostInfo{OS: "darwin", Arch: "arm64", Locale: "ko", DockerMode: "sandbox", DockerReady: true})
+	_, _ = st.AddWorkspace(ctx, repo)
+
+	red := mask.New()
+	localMgr := localact.NewManager(st, red, t.TempDir(), "", nil)
+	defer localMgr.Close()
+	runnerMgr := runners.NewManager(st, nil, nil, red, nil)
+	ctrl := NewController(st, localMgr, runnerMgr, red, nil)
+
+	ctrl.mu.Lock()
+	wfs := ctrl.discovered[repo]
+	ctrl.mu.Unlock()
+	if len(wfs) != 1 {
+		t.Fatalf("discovered %d workflows, want 1", len(wfs))
+	}
+
+	stages := computeWorkflowStages(wfs[0].Jobs)
+	if len(stages) != 3 {
+		t.Fatalf("stages len = %d, want 3 (changes -> lint/sign-win -> verify-mac)", len(stages))
+	}
+	if len(stages[0].Jobs) != 1 || stages[0].Jobs[0].ID != "changes" {
+		t.Fatalf("stage 0 = %+v, want [changes]", stages[0].Jobs)
+	}
+	if len(stages[1].Jobs) != 2 {
+		t.Fatalf("stage 1 jobs = %d, want 2", len(stages[1].Jobs))
+	}
+	if len(stages[2].Jobs) != 1 || stages[2].Jobs[0].ID != "verify-mac" {
+		t.Fatalf("stage 2 = %+v, want [verify-mac]", stages[2].Jobs)
+	}
+
+	// Render Pipeline mode with inspected macOS job -> verifies stage grid, inspector steps, and non-Linux hint.
+	ctrl.mu.Lock()
+	ctrl.previewMode = PreviewPipeline
+	ctrl.inspectedJobID = "verify-mac"
+	ctrl.mu.Unlock()
+	uiBuilder := &extsdk.UI{}
+	pipeNode := ctrl.Render(&extsdk.ViewContext{Context: &extsdk.Context{Locale: "ko"}, ViewID: "main"}, uiBuilder)
+	pipeRaw, err := json.Marshal(pipeNode)
+	if err != nil {
+		t.Fatalf("marshal pipeline: %v", err)
+	}
+	pipeStr := string(pipeRaw)
+	for _, want := range []string{"스테이지 1", "스테이지 2", "스테이지 3", "Verify signature", "macOS", "이 작업 실행"} {
+		if !strings.Contains(pipeStr, want) {
+			t.Fatalf("pipeline JSON missing %q", want)
+		}
+	}
+
+	// Switch to Graph mode -> renders directed graph with nodes and edges.
+	ctrl.mu.Lock()
+	ctrl.previewMode = PreviewGraph
+	ctrl.mu.Unlock()
+	graphNode := ctrl.Render(&extsdk.ViewContext{Context: &extsdk.Context{Locale: "ko"}, ViewID: "main"}, uiBuilder)
+	graphRaw, err := json.Marshal(graphNode)
+	if err != nil {
+		t.Fatalf("marshal graph: %v", err)
+	}
+	graphStr := string(graphRaw)
+	for _, want := range []string{`"kind":"graph"`, `"from":"changes"`, `"to":"sign-win"`, `"to":"verify-mac"`} {
+		if !strings.Contains(graphStr, want) {
+			t.Fatalf("graph JSON missing %q", want)
+		}
+	}
+}

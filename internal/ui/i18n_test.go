@@ -141,6 +141,11 @@ func TestLocalizedRenderingAndRoundTripHandlers(t *testing.T) {
 			if got := parseAuthModeValue(authModeLabel(loc, "jit")); got != "jit" {
 				t.Errorf("parseAuthModeValue(jit in %s) = %q", loc, got)
 			}
+			for _, pm := range []string{PreviewPipeline, PreviewGraph} {
+				if parsed, ok := parsePreviewModeValue(previewModeLabel(loc, pm)); !ok || parsed != pm {
+					t.Errorf("parsePreviewModeValue(%q in %s) = (%q, %v), want (%q, true)", previewModeLabel(loc, pm), loc, parsed, ok, pm)
+				}
+			}
 		})
 	}
 

@@ -1,6 +1,6 @@
 schema_version = 1
 id = "github-actions"
-version = "0.2.0"
+version = "0.3.0"
 publisher = "ironpark"
 name = "GitHub Actions"
 description = "Run GitHub Actions workflows locally with act and host isolated GVX self-hosted runners."
@@ -21,7 +21,7 @@ permissions = [
 type = "sandbox"
 dockerfile = "Dockerfile"
 context = "."
-image = "ghcr.io/ironpark/gvx-ext-github-actions:0.2.0"
+image = "ghcr.io/ironpark/gvx-ext-github-actions:0.3.0"
 port = 18900
 memory = "512m"
 cpus = "1"
